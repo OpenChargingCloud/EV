@@ -1,0 +1,16 @@
+# Build output
+bin/
+obj/
+
+# The frontend: what npm installs and what webpack emits
+node_modules/
+EV/Frontend/dist/
+
+# The web login of a running vehicle: a password hash, and nobody else's business
+web-login.json
+
+# What a vehicle was configured as, which is this machine's and not the repository's
+configuration.json
+
+# What a test run leaves behind.
+TestResults/
