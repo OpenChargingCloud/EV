@@ -566,6 +566,17 @@ namespace cloud.charging.open.EV
                                      // with a certificate this stays on.
                                      UseSecureCookies:       false,
 
+                                     // The shortest name a role of this vehicle has,
+                                     // because that is what a group identification has
+                                     // to be allowed to be. Hermod's own floor is four
+                                     // characters, which every role here clears today -
+                                     // and the day one does not, the group is refused by
+                                     // a returned result rather than an exception, which
+                                     // is a refusal nobody is obliged to notice, and the
+                                     // role it carries can never be held by anybody. The
+                                     // local controller's "cpo" is three.
+                                     MinUserGroupIdLength:   (Byte) UserRole.All.Min(role => role.Name.Length),
+
                                      LoggingPath:            AccountsPath,
                                      DatabaseFileName:       DefaultAccountsDatabaseFile,
 
@@ -962,12 +973,23 @@ namespace cloud.charging.open.EV
                 if (ExtAPI.TryGetUserGroup(role.GroupId, out _))
                     continue;
 
-                await ExtAPI.AddUserGroup(
-                          new UserGroup(
-                              role.GroupId,
-                              I18NString.Create(Languages.en, role.Name)
-                          )
-                      );
+                var added = await ExtAPI.AddUserGroup(
+                                      new UserGroup(
+                                          role.GroupId,
+                                          I18NString.Create(Languages.en, role.Name)
+                                      )
+                                  );
+
+                // Looked at, and that is the point: this answers with a result
+                // rather than throwing, so a group it declined to make would
+                // otherwise leave a role nobody can ever hold - and every route
+                // asking for it refusing everybody, with nothing anywhere to
+                // say why. Better to stop before the port opens.
+                if (added.Result != CommandResult.Success)
+                    throw new InvalidOperationException(
+                              $"The user group '{role.GroupId}' of this vehicle could not be made: " +
+                              $"{added.Description.FirstText()} A role without its group is a role nobody can hold."
+                          );
 
             }
 
@@ -981,18 +1003,37 @@ namespace cloud.charging.open.EV
             // and a group's stored form does not carry its members - so the
             // membership was there until the next start and gone after it,
             // which is the worst shape a permission can have.
-            if (admin is not null &&
-                ExtAPI.TryGetUser     (admin.Id,                     out var storedAdmin) &&
-                ExtAPI.TryGetUserGroup(UserRole.SystemAdmin.GroupId, out var adminGroup)  &&
-                storedAdmin is User user &&
-                adminGroup  is UserGroup group)
+            if (admin is not null)
             {
 
-                await ExtAPI.AddUserToUserGroup(
-                          user,
-                          User2UserGroupEdgeLabel.IsAdmin,
-                          group
-                      );
+                if (!ExtAPI.TryGetUser     (admin.Id,                     out var storedAdmin) ||
+                    !ExtAPI.TryGetUserGroup(UserRole.SystemAdmin.GroupId, out var adminGroup)  ||
+                     storedAdmin is not User      user ||
+                     adminGroup  is not UserGroup group)
+                {
+                    throw new InvalidOperationException(
+                              $"The account of this vehicle could not be put in the {UserRole.SystemAdmin.Name} group, " +
+                               "so the one account it has would be allowed to do nothing at all."
+                          );
+                }
+
+                var joined = await ExtAPI.AddUserToUserGroup(
+                                       user,
+                                       User2UserGroupEdgeLabel.IsAdmin,
+                                       group
+                                   );
+
+                // Looked at for the same reason as the group above: this
+                // answers with a result too, and a membership it declined to
+                // write leaves the one account able to do nothing at all -
+                // with a password about to be printed that opens nothing.
+                // A different result type from AddUserGroup's, and so a
+                // different question: IsSuccess rather than Result.
+                if (!joined.IsSuccess)
+                    throw new InvalidOperationException(
+                              $"The account '{DefaultAdminUser}' could not be put in the {UserRole.SystemAdmin.Name} group: " +
+                              $"{joined.ErrorDescription?.FirstText()} It would be able to do nothing at all."
+                          );
 
             }
 
