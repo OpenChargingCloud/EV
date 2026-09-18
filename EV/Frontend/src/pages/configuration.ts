@@ -59,7 +59,7 @@ export const configurationPage: Page = {
                         ${card('Battery',       'fa-battery-half',     configuration.battery)}
                         ${card('ISO 15118',     'fa-tower-broadcast',  configuration.v2g)}
                         ${card('HTTP server',   'fa-server',           configuration.http)}
-                        ${card('Web login',     'fa-user-lock',        configuration.web)}
+                        ${card('Accounts',      'fa-user-lock',        configuration.web)}
                         ${card('Event log',     'fa-list-ul',          configuration.log)}
                         ${card('Time',          'fa-clock',            configuration.time)}
 

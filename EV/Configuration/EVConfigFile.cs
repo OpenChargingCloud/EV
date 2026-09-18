@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2014-2026 GraphDefined GmbH <achim.friedland@graphdefined.com>
  * This file is part of EV <https://github.com/OpenChargingCloud/EV>
  *
@@ -39,7 +39,7 @@ namespace cloud.charging.open.EV.Configuration
     ///
     /// Nothing in here is secret, so it is an ordinary file that anybody who
     /// can read the directory may read. The one secret this vehicle has, the
-    /// web login, stays in its own file with its own permissions.
+    /// password of its account, stays where the HTTPExt API keeps it.
     /// </remarks>
     public sealed class EVConfigFile
     {

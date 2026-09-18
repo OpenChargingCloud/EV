@@ -38,8 +38,8 @@ export const loginPage: Page = {
                 </form>
 
                 <p class="small muted login-hint">
-                    The vehicle writes a password to its web login file at the first
-                    start and shows it once on the console.
+                    The vehicle makes up one account at its first start and shows
+                    its password once, on the console.
                 </p>
 
                 <p class="small muted">vehicle ${config.serverVersion} &middot; web ${config.frontendVersion}</p>

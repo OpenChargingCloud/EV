@@ -1010,8 +1010,8 @@ namespace cloud.charging.open.EV
         /// </summary>
         /// <remarks>
         /// Read-only: it answers "what am I running", not "change it". Nothing
-        /// here is a secret - the web login appears with its username and the
-        /// path of its file, and never with anything about its password.
+        /// here is a secret - the accounts appear as the path they live at and
+        /// the route to sign in, and never as anything about a password.
         /// </remarks>
         public JObject ConfigurationJSON()
 
@@ -1046,7 +1046,7 @@ namespace cloud.charging.open.EV
 
                    new JProperty("web",        new JObject(
                        new JProperty("accountsPath",   AccountsPath),
-                       new JProperty("extAPIPath",     ExtAPIPath.ToString()),
+                       new JProperty("signInAt",       $"{ExtAPIPath.ToString().TrimEnd('/')}/login"),
                        new JProperty("users",          ExtAPI.Users.     Count()),
                        new JProperty("groups",         ExtAPI.UserGroups.Count()),
                        new JProperty("cookie",         ExtAPI.SessionCookieName.ToString()),
