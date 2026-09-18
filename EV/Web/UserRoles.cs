@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2014-2026 GraphDefined GmbH <achim.friedland@graphdefined.com>
  * This file is part of EV <https://github.com/OpenChargingCloud/EV>
  *
@@ -20,6 +20,8 @@
 using System.Diagnostics.CodeAnalysis;
 
 #endregion
+
+using org.GraphDefined.Vanaheimr.Hermod.HTTP;
 
 namespace cloud.charging.open.EV.Web
 {
@@ -110,16 +112,37 @@ namespace cloud.charging.open.EV.Web
     /// A role somebody signs in as: a name, and the permissions it carries.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// A closed set, and deliberately so: a role this vehicle has never heard
-    /// of is a role it cannot enforce. So an unrecognised name is refused when
-    /// the login file is read, rather than quietly granting nothing - or, far
+    /// of is a role it cannot enforce. So a group whose name is not one of
+    /// these grants nothing, rather than quietly granting something - or, far
     /// worse, being taken for a known one because it looks similar.
+    /// </para>
+    /// <para>
+    /// Each role is a user group in the HTTPExt API, under the same name, and
+    /// membership of that group is what carries the permissions below. The
+    /// permissions stay here because they are this vehicle's own vocabulary:
+    /// the HTTPExt API knows users, groups and organizations, and has no
+    /// opinion about what "may start a charging session" means. So it answers
+    /// who somebody is and this answers what that lets them do.
+    /// </para>
     /// </remarks>
-    /// <param name="Name">How the role is written in the login file.</param>
+    /// <param name="Name">The role, and the name of the user group that carries it.</param>
     /// <param name="Permissions">What it grants.</param>
     public sealed record UserRole(String       Name,
                                   Permissions  Permissions)
     {
+
+        #region Properties
+
+        /// <summary>
+        /// The user group in the HTTPExt API whose members hold this role.
+        /// </summary>
+        public UserGroup_Id  GroupId
+            => UserGroup_Id.Parse(Name);
+
+        #endregion
+
 
         #region Data
 
