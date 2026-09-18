@@ -84,7 +84,7 @@ namespace cloud.charging.open.EV
         /// <summary>
         /// Where the accounts live, unless another directory is given.
         /// </summary>
-        public const String  DefaultAccountsPath          = "EV-accounts";
+        public const String  DefaultAccountsPath          = "accounts";
 
         /// <summary>
         /// The accounts themselves, inside that directory.
