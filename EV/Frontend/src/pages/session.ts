@@ -1,4 +1,5 @@
-import { api, type SessionBattery, type SessionConfiguration, type SessionRun, type SessionUpdate } from '../api/client';
+import { api, type Certificate, type CertificateKind, type CertificateStore,
+         type SessionBattery, type SessionConfiguration, type SessionRun, type SessionUpdate } from '../api/client';
 import { auth } from '../auth';
 import { html, must, render, type HTMLFragment } from '../html';
 import type { Page } from '../router';
@@ -60,6 +61,71 @@ export const sessionPage: Page = {
         let cancelled = false;
         let current: SessionConfiguration | null = null;
         let pending: ReturnType<typeof setTimeout> | null = null;
+
+        // What there is to choose from. Fetched once beside the settings and
+        // not polled with them: the store changes when somebody changes it, and
+        // this page polls every two seconds for the running session.
+        let store: CertificateStore | null = null;
+
+
+        /**
+         * One certificate slot, as a list of what the store holds of that kind.
+         *
+         * A list rather than a text field, because a handle is sixteen
+         * hexadecimal digits and nobody should be typing one. An expired or
+         * switched-off certificate is still offered, marked as what it is: it is
+         * a legitimate thing to have chosen, and hiding it would make a setting
+         * somebody already made look like no setting at all.
+         *
+         * Every slot may also be set to nothing, which is what "the vehicle does
+         * not present one at all" is.
+         */
+        function chooser(field:  'vehicleCertificate' | 'contractCertificate' | 'oemCertificate' | 'tariffCertificate',
+                         kind:   CertificateKind,
+                         label:  string): HTMLFragment {
+
+            const chosen    = current?.certificates[field] ?? null;
+            const available = store?.certificates[kind] ?? [];
+
+            // A handle the store no longer has is still what the setting says,
+            // so it is offered as itself rather than quietly becoming "none".
+            const missing = chosen !== null && chosen.missing;
+
+            return html`
+                <label>${label}
+                    <select name="${field}" ${mayChangeCerts ? '' : html`disabled`}>
+                        <option value="">(none)</option>
+                        ${available.map(one => html`
+                            <option value="${one.id}" ${chosen?.id === one.id ? html`selected` : ''}>
+                                ${describe(one)}
+                            </option>
+                        `)}
+                        ${missing ? html`
+                            <option value="${chosen!.id}" selected>${chosen!.id} - no longer in the store</option>
+                        ` : ''}
+                    </select>
+                </label>
+                ${available.length === 0 && !missing ? html`
+                    <p class="hint">
+                        None of this kind is in the
+                        <a href="/configuration/certificates">certificate store</a> yet.
+                    </p>` : ''}
+            `;
+
+        }
+
+
+        /** One certificate, as a line in a list somebody is choosing from. */
+        function describe(one: Certificate): string {
+
+            const state = one.expired     ? ' - EXPIRED'
+                        : one.notYetValid ? ' - not yet valid'
+                        : !one.active     ? ' - switched off'
+                        : '';
+
+            return `${one.label} (${one.keyAlgorithm}, until ${one.notAfter.slice(0, 10)})${state}`;
+
+        }
 
 
         function draw(): void {
@@ -266,30 +332,17 @@ export const sessionPage: Page = {
 
                         <form id="certificates-form" class="form-stack">
 
-                            <label>Vehicle certificate - who this vehicle is
-                                <input type="text" name="vehicleCertificate" value="${certificates.vehicleCertificate ?? ''}"
-                                       placeholder="a PKCS#12 file" ${mayChangeCerts ? '' : html`disabled`} />
-                            </label>
+                            ${chooser('vehicleCertificate',  'vehicle',
+                                      'Vehicle certificate - who this vehicle is')}
 
-                            <label>Contract certificate - who pays
-                                <input type="text" name="contractCertificate" value="${certificates.contractCertificate ?? ''}"
-                                       placeholder="a PKCS#12 file" ${mayChangeCerts ? '' : html`disabled`} />
-                            </label>
+                            ${chooser('contractCertificate', 'contract',
+                                      'Contract certificate - who pays')}
 
-                            <label>OEM provisioning certificate - what the vehicle was born with
-                                <input type="text" name="oemCertificate" value="${certificates.oemCertificate ?? ''}"
-                                       placeholder="a PKCS#12 file with a P-521 key" ${mayChangeCerts ? '' : html`disabled`} />
-                            </label>
+                            ${chooser('oemCertificate',      'oemProvisioning',
+                                      'OEM provisioning certificate - what the vehicle was born with')}
 
-                            <label>Tariff certificate - what a station's signed tariff is checked with
-                                <input type="text" name="tariffCertificate" value="${certificates.tariffCertificate ?? ''}"
-                                       placeholder="a PKCS#12 file" ${mayChangeCerts ? '' : html`disabled`} />
-                            </label>
-
-                            <label>Trust roots - what a station's certificate must chain to
-                                <input type="text" name="trustRoots" value="${certificates.trustRoots ?? ''}"
-                                       placeholder="a file, or a directory of them" ${mayChangeCerts ? '' : html`disabled`} />
-                            </label>
+                            ${chooser('tariffCertificate',   'tariffVerification',
+                                      "Tariff certificate - what a station's signed tariff is checked with")}
 
                             <label>PKI directory - the development hierarchy a station minted
                                 <input type="text" name="pkiDirectory" value="${certificates.pkiDirectory ?? ''}"
@@ -304,26 +357,24 @@ export const sessionPage: Page = {
 
                             <div class="kv-list">
                                 <div class="kv">
-                                    <span class="k">Passwords held</span>
+                                    <span class="k">Trust anchors believed</span>
                                     <span class="v">
-                                        ${[
-                                            certificates.passwordsHeld.vehicle  ? 'vehicle'  : null,
-                                            certificates.passwordsHeld.contract ? 'contract' : null,
-                                            certificates.passwordsHeld.oem      ? 'OEM'      : null,
-                                            certificates.passwordsHeld.tariff   ? 'tariff'   : null
-                                        ].filter(one => one !== null).join(', ') || 'none'}
+                                        ${certificates.trustAnchors.v2gRoot} V2G,
+                                        ${certificates.trustAnchors.moRoot} Mobility Operator,
+                                        ${certificates.trustAnchors.oemRoot} OEM
                                     </span>
                                 </div>
                             </div>
 
                             <span class="hint">
-                                Saved to ${configuration.file}. The three certificates are not interchangeable
-                                and mixing them up produces failures that read like protocol bugs: the Vehicle
-                                one says who this vehicle is, the contract one says who pays, the OEM one is
-                                what it was born with and all it can prove before it holds a contract.
-                                <strong>Passwords are never stored here.</strong> They are read from the
-                                environment - <code>EV_VEHICLE_CERT_PASSWORD</code> and the three beside it -
-                                or given at a start, and this page can only say which of them are held.
+                                Saved to ${configuration.file}. These name certificates in this vehicle's
+                                <a href="/configuration/certificates">certificate store</a>; put one there first
+                                and it appears here. They are not interchangeable, and mixing them up produces
+                                failures that read like protocol bugs: the Vehicle one says who this vehicle is,
+                                the contract one says who pays, the OEM one is what it was born with and all it
+                                can prove before it holds a contract. Which roots are believed is not chosen
+                                per session - every switched-on root of a kind is - so that is managed in the
+                                store as well.
                             </span>
 
                         </form>
@@ -517,7 +568,6 @@ export const sessionPage: Page = {
                     contractCertificate:  text(data.get('contractCertificate')),
                     oemCertificate:       text(data.get('oemCertificate')),
                     tariffCertificate:    text(data.get('tariffCertificate')),
-                    trustRoots:           text(data.get('trustRoots')),
                     pkiDirectory:         text(data.get('pkiDirectory'))
                 });
 
@@ -622,6 +672,12 @@ export const sessionPage: Page = {
             try
             {
                 const loaded = await api.session.get();
+
+                // Only on the first pass: the polling below is for the running
+                // session, and refetching the store thirty times a minute would
+                // be asking a question nobody changed the answer to.
+                if (store === null)
+                    store = await api.certificates.get().catch(() => null);
 
                 if (!cancelled) {
                     current = loaded;

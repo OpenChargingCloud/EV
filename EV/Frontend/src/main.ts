@@ -15,6 +15,7 @@ import { dnsPage }           from './pages/dns';
 import { ntsPage }           from './pages/nts';
 import { vehiclePage }       from './pages/vehicle';
 import { v2gPage }           from './pages/v2g';
+import { certificatesPage } from './pages/certificates';
 import { sessionPage }       from './pages/session';
 import { loginPage }         from './pages/login';
 import { logsPage }          from './pages/logs';
@@ -40,6 +41,7 @@ const router = new Router({
         { path: '/configuration/nts',     page: ntsPage,           guard: auth.requireSignIn },
         { path: '/configuration/vehicle', page: vehiclePage,       guard: auth.requireSignIn },
         { path: '/configuration/v2g',     page: v2gPage,           guard: auth.requireSignIn },
+        { path: '/configuration/certificates', page: certificatesPage, guard: auth.requireSignIn },
         { path: '/configuration/session', page: sessionPage,       guard: auth.requireSignIn },
         { path: '/logs',                 page: logsPage,           guard: auth.requireSignIn },
         { path: '/login',                page: loginPage }

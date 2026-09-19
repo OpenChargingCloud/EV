@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2014-2026 GraphDefined GmbH <achim.friedland@graphdefined.com>
  * This file is part of EV <https://github.com/OpenChargingCloud/EV>
  *
@@ -22,6 +22,7 @@ using System.Security.Cryptography;
 using Org.BouncyCastle.Security;
 using Org.BouncyCastle.Tls;
 
+using cloud.charging.open.protocols.ISO15118.Security;
 using cloud.charging.open.protocols.ISO15118.SharedCC;
 using cloud.charging.open.protocols.ISO15118.StateMachines.Iso20;
 using cloud.charging.open.protocols.ISO15118.Transport.BouncyCastle;
@@ -60,20 +61,28 @@ namespace cloud.charging.open.EV.ISO15118
     public static class VehicleCredentials
     {
 
-        #region LoadContract(Path, Password, Log)
+        #region LoadContract(Path, MORoots, Log)
 
         /// <summary>
         /// The Plug &amp; Charge <b>contract</b> credentials: who pays.
         /// </summary>
-        public static PncEvccOptions LoadContract(String     Path,
-                                                  String?    Password,
-                                                  EventLog   Log)
+        /// <param name="MORoots">
+        /// What this contract has to chain to, or null where this vehicle has been told no Mobility
+        /// Operator roots.
+        /// </param>
+        public static PncEvccOptions LoadContract(String              Path,
+                                                  V2GChainValidator?  MORoots,
+                                                  EventLog            Log)
         {
 
-            var (leaf, subCertificates, key, subject) = Credentials.LoadChain(Path, Password, "session.contractCertificate");
+            var (leaf, subCertificates, key, subject) = Credentials.LoadChain(Path, null, "session.contractCertificate");
 
             Log.Info($"Plug & Charge: contract certificate {subject} (+{subCertificates.Length} sub-CA(s)), {key.KeySize}-bit EC.",
                      "15118", "pnc");
+
+            Check(leaf, subCertificates, MORoots,
+                  "Plug & Charge", "the contract certificate", "Mobility Operator", "moRoot",
+                  "session.contractCertificate", Log, "pnc");
 
             return new PncEvccOptions(leaf, subCertificates, key);
 
@@ -94,12 +103,16 @@ namespace cloud.charging.open.EV.ISO15118
         /// answers such a request with a well-formed response the vehicle then cannot decrypt, which is why
         /// the curve is checked here - where it can still be explained - rather than at the failure.
         /// </remarks>
-        public static CertInstallEvccOptions LoadOEM(String     Path,
-                                                     String?    Password,
-                                                     EventLog   Log)
+        /// <param name="OEMRoots">
+        /// What this provisioning chain has to end in, or null where this vehicle has been told no OEM
+        /// roots.
+        /// </param>
+        public static CertInstallEvccOptions LoadOEM(String              Path,
+                                                     V2GChainValidator?  OEMRoots,
+                                                     EventLog            Log)
         {
 
-            var (leaf, subCertificates, key, subject) = Credentials.LoadChain(Path, Password, "session.oemCertificate", exportable: true);
+            var (leaf, subCertificates, key, subject) = Credentials.LoadChain(Path, null, "session.oemCertificate", exportable: true);
 
             if (key.KeySize != 521)
                 Log.Warning($"CertificateInstallation: the OEM key is {key.KeySize}-bit, and ISO 15118-20 contract " +
@@ -117,24 +130,80 @@ namespace cloud.charging.open.EV.ISO15118
             Log.Info($"CertificateInstallation: OEM certificate {subject} (+{subCertificates.Length} sub-CA(s)), {key.KeySize}-bit EC.",
                      "15118", "pnc");
 
+            Check(leaf, subCertificates, OEMRoots,
+                  "CertificateInstallation", "the OEM provisioning certificate", "OEM", "oemRoot",
+                  "session.oemCertificate", Log, "pnc");
+
             return new CertInstallEvccOptions(leaf, subCertificates, key, agreement);
 
         }
 
         #endregion
 
-        #region LoadTariffVerifyKey(Path, Password, Log)
+        #region (private static) Check(Leaf, SubCertificates, Roots, Area, What, RootKind, KindName, Setting, Log, Tag)
+
+        /// <summary>
+        /// Whether a chain this vehicle carries ends where it should, said out loud either way.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Refused when there are roots and it does not chain; permitted with a warning when there are
+        /// none.</b> The asymmetry is the same one the TLS side has always had, and for the same reason: a
+        /// vehicle that was never told what to believe cannot form an opinion, and pretending otherwise
+        /// would turn "nothing configured" into "everything rejected" - which fails identically to a real
+        /// rejection and means something entirely different.
+        /// </para>
+        /// <para>
+        /// This is the vehicle checking its own credentials, which is worth being clear about. It catches
+        /// the certificate that was issued under a hierarchy this vehicle is not actually part of, the one
+        /// whose sub-CA did not travel with it, and the one that was quietly replaced - all of which
+        /// otherwise surface as a station refusing an authorization for reasons it does not explain.
+        /// </para>
+        /// </remarks>
+        private static void Check(Byte[]              Leaf,
+                                  Byte[][]            SubCertificates,
+                                  V2GChainValidator?  Roots,
+                                  String              Area,
+                                  String              What,
+                                  String              RootKind,
+                                  String              KindName,
+                                  String              Setting,
+                                  EventLog            Log,
+                                  String              Tag)
+        {
+
+            if (Roots is null)
+            {
+                Log.Warning($"{Area}: nothing vouches for {What} - this vehicle holds no {RootKind} root. " +
+                            $"Import one as \"{KindName}\" to have the chain checked.",
+                            "15118", Tag);
+                return;
+            }
+
+            var result = Roots.Validate(Leaf, SubCertificates);
+
+            if (!result.Ok)
+                throw new ArgumentException(
+                          $"{Setting}: {What} does not chain to any {RootKind} root this vehicle holds - " +
+                          $"{result.Reason}. Import the right root, or choose another certificate.");
+
+            Log.Info($"{Area}: {What} chains to {result.Anchor}.", "15118", Tag);
+
+        }
+
+        #endregion
+
+        #region LoadTariffVerifyKey(Path, Log)
 
         /// <summary>
         /// The public key a station's signed SalesTariff or AbsolutePriceSchedule is checked against. The
         /// signing half of the same pair lives at the station.
         /// </summary>
         public static ECDsa LoadTariffVerifyKey(String     Path,
-                                                String?    Password,
                                                 EventLog   Log)
         {
 
-            var (key, subject) = Credentials.LoadEcdsaKey(Path, Password, wantPrivate: false, "session.tariffCertificate");
+            var (key, subject) = Credentials.LoadEcdsaKey(Path, null, wantPrivate: false, "session.tariffCertificate");
 
             Log.Info($"Tariff: verifying against {subject}, {key.KeySize}-bit EC.", "15118", "tariff");
 
@@ -144,7 +213,7 @@ namespace cloud.charging.open.EV.ISO15118
 
         #endregion
 
-        #region BouncyCastleOptions(VehicleCertificate, Password, PKIDirectory, Log)
+        #region BouncyCastleOptions(VehicleCertificate, PKIDirectory, Log)
 
         /// <summary>
         /// What the BouncyCastle backend needs: this vehicle's own chain and key, and - where there is
@@ -165,7 +234,6 @@ namespace cloud.charging.open.EV.ISO15118
         /// the only place that knows whether any were configured.
         /// </remarks>
         public static BcTlsOptions BouncyCastleOptions(String?    VehicleCertificate,
-                                                       String?    Password,
                                                        String?    PKIDirectory,
                                                        EventLog   Log)
         {
@@ -175,7 +243,7 @@ namespace cloud.charging.open.EV.ISO15118
             if (VehicleCertificate is not null)
             {
 
-                var own       = Credentials.LoadForBouncyCastle(VehicleCertificate, Password, "session.vehicleCertificate");
+                var own       = Credentials.LoadForBouncyCastle(VehicleCertificate, null, "session.vehicleCertificate");
                 var seccLeaf  = PinnedStationLeaf(PKIDirectory);
 
                 if (seccLeaf is not null)

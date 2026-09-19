@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2014-2026 GraphDefined GmbH <achim.friedland@graphdefined.com>
  * This file is part of EV <https://github.com/OpenChargingCloud/EV>
  *
@@ -273,10 +273,10 @@ namespace cloud.charging.open.EV.Tests
             // could carry one there. Checked as a property of the type rather
             // than trusted as a habit.
             var written = new SessionConfiguration(
-                              VehicleCertificate:   "vehicle.p12",
-                              ContractCertificate:  "contract.p12",
-                              OEMCertificate:       "oem.p12",
-                              TariffCertificate:    "tariff.p12"
+                              VehicleCertificate:   "a1b2c3d4e5f60718",
+                              ContractCertificate:  "b1b2c3d4e5f60718",
+                              OEMCertificate:       "c1b2c3d4e5f60718",
+                              TariffCertificate:    "d1b2c3d4e5f60718"
                           ).ToJSON();
 
             foreach (var property in written.Properties())
@@ -284,6 +284,66 @@ namespace cloud.charging.open.EV.Tests
                             $"'{property.Name}' looks like it could carry a password into the configuration file.");
 
             Assert.That(written.Properties().Count(), Is.EqualTo(4));
+
+        }
+
+        #endregion
+
+        #region TrustRootsIsRefusedByName()
+
+        [Test]
+        public void TrustRootsIsRefusedByName()
+        {
+
+            // Refused rather than ignored. A field this section no longer knows
+            // would otherwise be passed over in silence, and somebody whose file
+            // was written before the store existed would get a vehicle that
+            // trusts no station and says nothing about why.
+            Assert.That(SessionConfiguration.TryParse(
+                            new JObject(new JProperty("trustRoots", "/etc/v2g/roots")),
+                            out _, out var error),
+                        Is.False);
+
+            Assert.That(error, Does.Contain("certificate store"));
+
+        }
+
+        #endregion
+
+        #region APathWhereAHandleBelongsIsSaidToBeThat()
+
+        [Test]
+        public void APathWhereAHandleBelongsIsSaidToBeThat()
+        {
+
+            foreach (var written in new[] { "/etc/v2g/contract.p12", @"C:\certs\contract.p12", "contract.p12" })
+            {
+
+                Assert.That(SessionConfiguration.TryParse(
+                                new JObject(new JProperty("contractCertificate", written)),
+                                out _, out var error),
+                            Is.False, $"'{written}' is a path and should be refused as one");
+
+                Assert.That(error, Does.Contain("store"));
+
+            }
+
+        }
+
+        #endregion
+
+        #region AHandleIsTakenAsOne()
+
+        [Test]
+        public void AHandleIsTakenAsOne()
+        {
+
+            Assert.That(SessionConfiguration.TryParse(
+                            new JObject(new JProperty("contractCertificate", "a1b2c3d4e5f60718")),
+                            out var configuration, out var error),
+                        Is.True, error);
+
+            Assert.That(configuration!.ContractCertificate, Is.EqualTo("a1b2c3d4e5f60718"));
 
         }
 
@@ -305,11 +365,10 @@ namespace cloud.charging.open.EV.Tests
                                  MCS:                           false,
                                  TLS:                           TlsStack.Dotnet,
                                  PKIDirectory:                  "pki",
-                                 VehicleCertificate:            "vehicle.p12",
-                                 TrustRoots:                    "roots",
-                                 ContractCertificate:           "contract.p12",
-                                 OEMCertificate:                "oem.p12",
-                                 TariffCertificate:             "tariff.p12",
+                                 VehicleCertificate:            "a1b2c3d4e5f60718",
+                                 ContractCertificate:           "b1b2c3d4e5f60718",
+                                 OEMCertificate:                "c1b2c3d4e5f60718",
+                                 TariffCertificate:             "d1b2c3d4e5f60718",
                                  TargetEnergy_kWh:              10,
                                  MaxChargingTime:               TimeSpan.FromMinutes(10),
                                  DepartureIn:                   TimeSpan.FromMinutes(20),

@@ -31,6 +31,7 @@ using org.GraphDefined.Vanaheimr.Norn.NTS;
 
 using cloud.charging.open.protocols.ISO15118.Discovery;
 
+using cloud.charging.open.EV.Certificates;
 using cloud.charging.open.EV.Configuration;
 using cloud.charging.open.EV.ISO15118;
 using cloud.charging.open.EV.Logging;
@@ -370,7 +371,7 @@ namespace cloud.charging.open.EV
         /// <param name="DNSClient">How to resolve names, or null to make a client.</param>
         /// <param name="NTSClient">Where to read the time, or null to make a client.</param>
         /// <param name="Frontend">Where the web interface comes from, or null for the embedded bundle.</param>
-        /// <param name="Passwords">What opens the PKCS#12 files the session settings name; the environment fills in whatever is not given here.</param>
+        /// <param name="CertificatesPath">The directory the certificate store lives in between starts.</param>
         /// <param name="Log">Where everything that happens is written, or null to make a log.</param>
         /// <param name="LogToConsole">Whether the log is also written to the console.</param>
         /// <param name="ConsoleLogLevel">How much of it reaches the console.</param>
@@ -385,7 +386,7 @@ namespace cloud.charging.open.EV
                   DNSClient?             DNSClient         = null,
                   NTSClient?             NTSClient         = null,
                   IStaticContentSource?  Frontend          = null,
-                  CertificatePasswords?  Passwords         = null,
+                  String?                CertificatesPath  = null,
                   EventLog?              Log               = null,
                   Boolean                LogToConsole      = true,
                   LogLevel               ConsoleLogLevel   = LogLevel.Info,
@@ -487,6 +488,23 @@ namespace cloud.charging.open.EV
 
             #endregion
 
+            #region The certificate store, before anything that chooses from it
+
+            // What was handed in wins over what the file says, which is the
+            // precedence a command line expects. Read before the session
+            // settings are applied, because those name certificates in it.
+            this.Certificates = new CertificateStore(
+                                    CertificatesPath
+                                        ?? configuration?.Certificates?.Directory
+                                        ?? CertificatesConfiguration.DefaultDirectory,
+                                    this.Log
+                                );
+
+            this.Certificates.Reload();
+            this.Certificates.WarnAboutStoredKeys();
+
+            #endregion
+
             #region What this vehicle is, and what it does with a station
 
             if (configuration?.Vehicle is not null)
@@ -498,16 +516,7 @@ namespace cloud.charging.open.EV
             if (configuration?.Session is not null)
                 ApplySessionConfiguration(configuration.Session);
 
-            // What was handed in wins, and the environment fills in the rest -
-            // the precedence a command line expects. Neither is ever written to
-            // the configuration file, which is the whole reason these do not
-            // travel with the settings that name the files they open.
-            this.Passwords = (Passwords ?? CertificatePasswords.None).Or(CertificatePasswords.FromEnvironment());
-
             this.Log.Info($"This vehicle is {VehicleName}, {StateOfCharge_percent:F0} % of {BatteryCapacity_kWh:F0} kWh.", "vehicle", "config");
-
-            if (this.Passwords != CertificatePasswords.None)
-                this.Log.Info($"Certificates: {this.Passwords}.", "15118", "config");
 
             #endregion
 

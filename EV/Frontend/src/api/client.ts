@@ -409,6 +409,90 @@ export interface SessionRun {
     pausedRun?:          SessionRun;
 }
 
+/** What a certificate is for. Roots are believed; the rest are presented. */
+export type CertificateKind = 'v2gRoot' | 'moRoot' | 'oemRoot'
+                            | 'vehicle' | 'contract' | 'oemProvisioning' | 'tariffVerification';
+
+/** One certificate in the store. Everything but label and active is read out of the file. */
+export interface Certificate {
+    /** The handle it is addressed by: the first 16 digits of its fingerprint. */
+    id:             string;
+    kind:           CertificateKind;
+    fileName:       string;
+    label:          string;
+    subject:        string;
+    issuer:         string;
+    serialNumber:   string;
+    /** Its SHA-256 fingerprint in full, for comparing against what a CA said. */
+    thumbprint:     string;
+    notBefore:      string;
+    notAfter:       string;
+    keyAlgorithm:   string;
+    hasPrivateKey:  boolean;
+    /** How many further certificates travel with it, e.g. its sub-CAs. */
+    chainLength:    number;
+    /** Whether this vehicle is using it. Somebody switches this; time does not. */
+    active:         boolean;
+    importedAt:     string;
+    expired:        boolean;
+    notYetValid:    boolean;
+    /** Active, and inside its own validity. */
+    usable:         boolean;
+    description:    string;
+}
+
+/** What one of the session's certificate slots is set to, resolved against the store. */
+export interface ChosenCertificate {
+    id:         string;
+    /** True when the store no longer has it - a different problem from nothing chosen. */
+    missing:    boolean;
+    label?:     string;
+    subject?:   string;
+    notAfter?:  string;
+    usable?:    boolean;
+}
+
+/** The whole store, grouped the way it is shown. */
+export interface CertificateStore {
+    directory:     string;
+    /** The kinds that are trust anchors, in the order they are shown. */
+    trustAnchors:  CertificateKind[];
+    /** The kinds that are presented, in the order they are shown. */
+    credentials:   CertificateKind[];
+    kinds:         Record<CertificateKind, {
+                       description:     string;
+                       trustAnchor:     boolean;
+                       needsPrivateKey: boolean;
+                   }>;
+    certificates:  Record<CertificateKind, Certificate[]>;
+    /** Which handle each session slot currently names. */
+    chosen: {
+        vehicleCertificate:   string | null;
+        contractCertificate:  string | null;
+        oemCertificate:       string | null;
+        tariffCertificate:    string | null;
+    };
+    /** Whether anything in the store carries a private key, which is kept unencrypted. */
+    keysAreUnencrypted: boolean;
+}
+
+/** What an import sends: the file, base64-encoded, and what to make of it. */
+export interface CertificateImport {
+    kind:       CertificateKind;
+    /** The file's bytes, base64-encoded. PEM, DER or PKCS#12. */
+    content:    string;
+    /** What opens it, where it is a protected PKCS#12. Used once and not kept. */
+    password?:  string;
+    /** What to call it; its common name where this is left out. */
+    label?:     string;
+}
+
+/** What a change to a stored certificate may say. Everything else is read from the file. */
+export interface CertificateUpdate {
+    active?:  boolean;
+    label?:   string | null;
+}
+
 /** What this vehicle does once it has found a station. */
 export interface SessionConfiguration {
     /** The station to drive to, or null to look for one. */
@@ -422,13 +506,13 @@ export interface SessionConfiguration {
     };
     certificates: {
         pkiDirectory:         string | null;
-        vehicleCertificate:   string | null;
-        trustRoots:           string | null;
-        contractCertificate:  string | null;
-        oemCertificate:       string | null;
-        tariffCertificate:    string | null;
-        /** Which of them the vehicle holds a password for. Never the passwords. */
-        passwordsHeld:        { vehicle: boolean; contract: boolean; oem: boolean; tariff: boolean };
+        /** What each slot is currently set to, resolved against the store. */
+        vehicleCertificate:   ChosenCertificate | null;
+        contractCertificate:  ChosenCertificate | null;
+        oemCertificate:       ChosenCertificate | null;
+        tariffCertificate:    ChosenCertificate | null;
+        /** How many usable roots of each kind this vehicle believes. */
+        trustAnchors:         { v2gRoot: number; moRoot: number; oemRoot: number };
     };
     goals: {
         targetEnergyKWh:              number | null;
@@ -457,7 +541,6 @@ export interface SessionUpdate {
     slacPeer?:                     string | null;
     pkiDirectory?:                 string | null;
     vehicleCertificate?:           string | null;
-    trustRoots?:                   string | null;
     contractCertificate?:          string | null;
     oemCertificate?:               string | null;
     tariffCertificate?:            string | null;
@@ -876,6 +959,36 @@ export const api = {
          * 1200 ms - so unlike a session this one is waited for.
          */
         pair: () => request<SlacResult>('POST', '/configuration/v2g/pair', {}, afterAsking([ 10 ]))
+
+    },
+
+    certificates: {
+
+        /** The whole store, grouped by kind. */
+        get:     ()                                       => request<CertificateStore>('GET', '/certificates'),
+
+        /**
+         * Put a certificate into the store.
+         *
+         * Importing the same file twice is the same entry - the handle is its
+         * fingerprint - so this is safe to repeat.
+         */
+        import:  (certificate: CertificateImport)         => request<Certificate>('POST', '/certificates', certificate),
+
+        /** Switch one on or off, or rename it. */
+        update:  (id: string, update: CertificateUpdate)  => request<Certificate>('PATCH', `/certificates/${encodeURIComponent(id)}`, update),
+
+        /** Take one out of the store and delete its file. Refused while a session names it. */
+        remove:  (id: string)                             => request<CertificateStore>('DELETE', `/certificates/${encodeURIComponent(id)}`),
+
+        /**
+         * Read the store directory again.
+         *
+         * For certificates somebody copied in rather than uploaded - which is a
+         * perfectly good way to install one on a machine you already have a
+         * shell on.
+         */
+        reload:  ()                                       => request<CertificateStore>('POST', '/certificates/reload', {})
 
     },
 

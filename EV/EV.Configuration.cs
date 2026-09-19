@@ -29,6 +29,7 @@ using org.GraphDefined.Vanaheimr.Norn.NTS;
 
 using cloud.charging.open.protocols.ISO15118.SDP.Messages;
 
+using cloud.charging.open.EV.Certificates;
 using cloud.charging.open.EV.Configuration;
 using cloud.charging.open.EV.ISO15118;
 
@@ -790,6 +791,99 @@ namespace cloud.charging.open.EV
 
 
 
+        #region Certificates
+
+        #region CertificatesJSON()
+
+        /// <summary>
+        /// Everything in this vehicle's certificate store, grouped the way it is shown.
+        /// </summary>
+        /// <remarks>
+        /// Two groups and not one list. The roots are what this vehicle <i>believes</i>: any number of each
+        /// kind may be on at once, and none of them is ever chosen for a session. The credentials are what
+        /// it <i>presents</i>: exactly one of each is chosen, and that choice is a session setting rather
+        /// than a property of the store. A page that put them in one table would have to explain that
+        /// difference in a column heading.
+        ///
+        /// Which handle each kind of credential is currently chosen by is answered here as well, so that
+        /// the page can mark it without also fetching the session settings.
+        /// </remarks>
+        public JObject CertificatesJSON()
+        {
+
+            var byKind = new JObject();
+
+            foreach (var kind in CertificateKindExtensions.All)
+                byKind.Add(kind.AsText(),
+                           new JArray(Certificates.ByKind(kind).Select(entry => entry.ToJSON(WithDiagnostics: true))));
+
+            return new JObject(
+
+                       new JProperty("directory",    Certificates.Directory),
+
+                       new JProperty("trustAnchors", new JArray(
+                           CertificateKindExtensions.All.Where(kind =>  kind.IsTrustAnchor()).Select(kind => kind.AsText())
+                       )),
+
+                       new JProperty("credentials",  new JArray(
+                           CertificateKindExtensions.All.Where(kind => !kind.IsTrustAnchor()).Select(kind => kind.AsText())
+                       )),
+
+                       new JProperty("kinds",        new JObject(
+                           CertificateKindExtensions.All.Select(kind =>
+                               new JProperty(kind.AsText(), new JObject(
+                                   new JProperty("description",     kind.Describe()),
+                                   new JProperty("trustAnchor",     kind.IsTrustAnchor()),
+                                   new JProperty("needsPrivateKey", kind.NeedsPrivateKey())
+                               )))
+                       )),
+
+                       new JProperty("certificates", byKind),
+
+                       new JProperty("chosen",       new JObject(
+                           new JProperty("vehicleCertificate",   SessionSettings.VehicleCertificate),
+                           new JProperty("contractCertificate",  SessionSettings.ContractCertificate),
+                           new JProperty("oemCertificate",       SessionSettings.OEMCertificate),
+                           new JProperty("tariffCertificate",    SessionSettings.TariffCertificate)
+                       )),
+
+                       // Said here because this is the page where somebody is looking at the
+                       // consequences of it, rather than only in the log at a start.
+                       new JProperty("keysAreUnencrypted", Certificates.Entries.Any(entry => entry.HasPrivateKey))
+
+                   );
+
+        }
+
+        #endregion
+
+        #region UsedBySession(Handle)
+
+        /// <summary>
+        /// The session setting that names this certificate, or null where none does.
+        /// </summary>
+        public String? UsedBySession(String? Handle)
+        {
+
+            if (Handle is null or { Length: 0 })
+                return null;
+
+            var settings = SessionSettings;
+
+            if (settings.VehicleCertificate  == Handle)  return "vehicleCertificate";
+            if (settings.ContractCertificate == Handle)  return "contractCertificate";
+            if (settings.OEMCertificate      == Handle)  return "oemCertificate";
+            if (settings.TariffCertificate   == Handle)  return "tariffCertificate";
+
+            return null;
+
+        }
+
+        #endregion
+
+        #endregion
+
+
         #region Session
 
         #region SessionConfigurationJSON()
@@ -798,10 +892,9 @@ namespace cloud.charging.open.EV
         /// What this vehicle does once it has found a station, and how the last session went.
         /// </summary>
         /// <remarks>
-        /// The certificates appear by path and never by password - see <see cref="CertificatePasswords"/>
-        /// for why that is a property of the types rather than of this method. Which passwords are held is
-        /// reported, because "the file names an encrypted certificate and nothing has the password" is a
-        /// state somebody needs to be able to see without running a session to find out.
+        /// The certificates appear as handles into the store, and each one is answered with what that
+        /// handle currently resolves to - the label, and whether it is usable at all. A page that showed
+        /// only the handle would be a page on which a deleted certificate and a working one look the same.
         /// </remarks>
         public JObject SessionConfigurationJSON()
 
@@ -819,18 +912,17 @@ namespace cloud.charging.open.EV
 
                    new JProperty("certificates",             new JObject(
                        new JProperty("pkiDirectory",             SessionSettings.PKIDirectory),
-                       new JProperty("vehicleCertificate",       SessionSettings.VehicleCertificate),
-                       new JProperty("trustRoots",               SessionSettings.TrustRoots),
-                       new JProperty("contractCertificate",      SessionSettings.ContractCertificate),
-                       new JProperty("oemCertificate",           SessionSettings.OEMCertificate),
-                       new JProperty("tariffCertificate",        SessionSettings.TariffCertificate),
-                       // Which of them this vehicle holds a password for, and
-                       // never what any password is.
-                       new JProperty("passwordsHeld",            new JObject(
-                           new JProperty("vehicle",                  Passwords.Vehicle  is not null),
-                           new JProperty("contract",                 Passwords.Contract is not null),
-                           new JProperty("oem",                      Passwords.OEM      is not null),
-                           new JProperty("tariff",                   Passwords.Tariff   is not null)
+                       new JProperty("vehicleCertificate",       Chosen(SessionSettings.VehicleCertificate)),
+                       new JProperty("contractCertificate",      Chosen(SessionSettings.ContractCertificate)),
+                       new JProperty("oemCertificate",           Chosen(SessionSettings.OEMCertificate)),
+                       new JProperty("tariffCertificate",        Chosen(SessionSettings.TariffCertificate)),
+                       // The roots are not chosen per session - every usable
+                       // one of each kind is believed - so what is reported is
+                       // how many there are to believe.
+                       new JProperty("trustAnchors",             new JObject(
+                           CertificateKindExtensions.All.
+                               Where (kind => kind.IsTrustAnchor()).
+                               Select(kind => new JProperty(kind.AsText(), Certificates.UsableByKind(kind).Count))
                        ))
                    )),
 
@@ -850,6 +942,46 @@ namespace cloud.charging.open.EV
                    new JProperty("file",                     ConfigFile.Path)
 
                );
+
+        #endregion
+
+        #region (private) Chosen(Handle)
+
+        /// <summary>
+        /// What one of the session's certificate handles currently stands for.
+        /// </summary>
+        /// <remarks>
+        /// Null where nothing is chosen, and an object with the handle in it
+        /// otherwise - carrying what the store says about it, or
+        /// <c>"missing": true</c> where the store has nothing by that name. The
+        /// missing case is reported rather than answered as "nothing chosen",
+        /// because a certificate somebody deleted out from under a session
+        /// setting is a different problem from a setting nobody ever made, and
+        /// only one of the two is fixed by choosing something.
+        /// </remarks>
+        private JObject? Chosen(String? Handle)
+        {
+
+            if (Handle is null)
+                return null;
+
+            var entry = Certificates.Get(Handle);
+
+            return entry is null
+                       ? new JObject(
+                             new JProperty("id",       Handle),
+                             new JProperty("missing",  true)
+                         )
+                       : new JObject(
+                             new JProperty("id",       entry.Id),
+                             new JProperty("label",    entry.Label),
+                             new JProperty("subject",  entry.Subject),
+                             new JProperty("notAfter", entry.NotAfter.UtcDateTime),
+                             new JProperty("usable",   entry.IsUsable),
+                             new JProperty("missing",  false)
+                         );
+
+        }
 
         #endregion
 
@@ -874,31 +1006,41 @@ namespace cloud.charging.open.EV
             if (!SessionConfiguration.TryParse(JSON, out var configuration, out Error))
                 return false;
 
-            // Refused here rather than discovered at the handshake: a file that
-            // names a certificate this machine does not have is a setting
+            // Refused here rather than discovered at the handshake: a setting
+            // that names a certificate this vehicle does not have is a setting
             // somebody believed they had made.
-            foreach (var (field, path) in new[] {
-                         ("vehicleCertificate",  configuration.VehicleCertificate),
-                         ("contractCertificate", configuration.ContractCertificate),
-                         ("oemCertificate",      configuration.OEMCertificate),
-                         ("tariffCertificate",   configuration.TariffCertificate)
+            //
+            // The kind is checked as well as the existence, because the four
+            // handles are not interchangeable and a contract certificate put in
+            // the Vehicle slot fails as a TLS handshake the station appears to
+            // have hung up on.
+            foreach (var (field, handle, wanted) in new[] {
+                         ("vehicleCertificate",  configuration.VehicleCertificate,  CertificateKind.Vehicle),
+                         ("contractCertificate", configuration.ContractCertificate, CertificateKind.Contract),
+                         ("oemCertificate",      configuration.OEMCertificate,      CertificateKind.OEMProvisioning),
+                         ("tariffCertificate",   configuration.TariffCertificate,   CertificateKind.TariffVerification)
                      })
             {
 
-                if (path is not null && !File.Exists(path))
+                if (handle is null)
+                    continue;
+
+                var entry = Certificates.Get(handle);
+
+                if (entry is null)
                 {
-                    Error = $"'{SessionConfiguration.SectionName}.{field}': there is no file '{path}'.";
+                    Error = $"'{SessionConfiguration.SectionName}.{field}': there is no certificate '{handle}' " +
+                             "in this vehicle's store.";
                     return false;
                 }
 
-            }
+                if (entry.Kind != wanted)
+                {
+                    Error = $"'{SessionConfiguration.SectionName}.{field}': '{entry.Label}' is a " +
+                            $"{entry.Kind.AsText()} and this names a {wanted.AsText()}.";
+                    return false;
+                }
 
-            // Roots may be a file or a directory of them, so this one only asks
-            // that it is something.
-            if (configuration.TrustRoots is { } roots && !File.Exists(roots) && !Directory.Exists(roots))
-            {
-                Error = $"'{SessionConfiguration.SectionName}.trustRoots': there is no file or directory '{roots}'.";
-                return false;
             }
 
             if (configuration.PKIDirectory is { } pki && !Directory.Exists(pki))
@@ -955,7 +1097,6 @@ namespace cloud.charging.open.EV
             var tls          = Settle("tls",                 Configuration.TLS,                 previous.TLS);
             var pkiDirectory = Settle("pkiDirectory",        Configuration.PKIDirectory,        previous.PKIDirectory);
             var vehicleCert  = Settle("vehicleCertificate",  Configuration.VehicleCertificate,  previous.VehicleCertificate);
-            var trustRoots   = Settle("trustRoots",          Configuration.TrustRoots,          previous.TrustRoots);
             var contractCert = Settle("contractCertificate", Configuration.ContractCertificate, previous.ContractCertificate);
             var oemCert      = Settle("oemCertificate",      Configuration.OEMCertificate,      previous.OEMCertificate);
             var tariffCert   = Settle("tariffCertificate",   Configuration.TariffCertificate,   previous.TariffCertificate);
@@ -976,7 +1117,6 @@ namespace cloud.charging.open.EV
                                   tls,
                                   pkiDirectory,
                                   vehicleCert,
-                                  trustRoots,
                                   contractCert,
                                   oemCert,
                                   tariffCert,
@@ -1011,14 +1151,16 @@ namespace cloud.charging.open.EV
             foreach (var (name, was, now) in new (String, String?, String?)[] {
                          ("PKI directory",         previous.PKIDirectory,        pkiDirectory),
                          ("Vehicle certificate",   previous.VehicleCertificate,  vehicleCert),
-                         ("trust roots",           previous.TrustRoots,          trustRoots),
                          ("contract certificate",  previous.ContractCertificate, contractCert),
                          ("OEM certificate",       previous.OEMCertificate,      oemCert),
                          ("tariff certificate",    previous.TariffCertificate,   tariffCert)
                      })
             {
+                // Said by the name somebody gave it rather than by its handle:
+                // "contract certificate = 3f2a1c8b..." is a sentence nobody can
+                // check without looking the handle up again.
                 if (was != now)
-                    changed.Add($"{name} = {now ?? "none"}");
+                    changed.Add($"{name} = {(now is null ? "none" : Certificates.Get(now)?.Label ?? now)}");
             }
 
             if (previous.TargetEnergy_kWh != targetEnergy)

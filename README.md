@@ -75,16 +75,32 @@ A request held open for a full charge is a request that times out; the vehicle
 says it has started, and the session resource carries the result when it ends.
 
 
-## Certificates, and the one thing that is not written down
+## Certificates, and where they live
 
-Three certificates, not interchangeable, and mixing them up produces failures
-that read like protocol bugs — the Vehicle certificate is who this vehicle is,
-the contract certificate is who pays, the OEM provisioning certificate is what
-it was born with. Their **paths** live in the configuration file with
-everything else. Their **passwords** do not, and cannot: `SessionConfiguration`
-has no field that could carry one there, and `CertificatePasswords` is a
-separate type read from the environment or handed in at a start. The API
-reports which passwords are held and never what any of them is.
+Everything this vehicle believes and everything it presents is in one store —
+`Certificates/CertificateStore.cs`, a directory of files with an `index.json`
+beside them — and is addressed by a short handle rather than by a path.
+
+Two groups, and they behave differently in every respect that matters. A
+**root** is what this vehicle believes: `v2gRoot` for the station's chain,
+`moRoot` for a contract's, `oemRoot` for a provisioning chain. Any number of
+each may be switched on at once, all of them are believed, and none is ever
+chosen for a session. Keeping the three apart is the point — one bag of roots
+would let an OEM root vouch for a contract, which is the difference between a
+vehicle that checks who is charging it and one that checks that somebody signed
+something.
+
+A **credential** is what this vehicle presents: the Vehicle certificate is who
+it is, the contract certificate is who pays, the OEM provisioning certificate
+is what it was born with, and the tariff certificate is what a station's signed
+tariff is checked against. Exactly one of each is chosen, and that choice is a
+session setting — `SessionConfiguration` carries the handle, never the file.
+
+The store holds private keys **unencrypted**: a PKCS#12 is opened with its
+password once, at import, and written back without one, so that any number of
+certificates per role work without any number of passwords to carry. The file
+system is what guards them, and the vehicle says so at every start and at every
+import.
 
 
 ## What it is not

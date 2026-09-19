@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2014-2026 GraphDefined GmbH <achim.friedland@graphdefined.com>
  * This file is part of EV <https://github.com/OpenChargingCloud/EV>
  *
@@ -39,11 +39,18 @@ namespace cloud.charging.open.EV.Configuration
     /// missing keeps whatever the vehicle was given at construction, and a
     /// vehicle given nothing keeps the system default.
     ///
-    /// <b>Certificates are here by path and never by password.</b> A path is
-    /// not a secret and belongs with the rest of what a vehicle is; the
-    /// password that opens a PKCS#12 is, and is read from the environment or
-    /// handed in at a start. Nothing in this record can carry one, which is a
-    /// property of the record rather than of the code that writes it.
+    /// <b>Certificates are named here and kept elsewhere.</b> Each of the four
+    /// below is a handle into the certificate store - see
+    /// <see cref="CertificatesConfiguration"/> and
+    /// <see cref="Certificates.CertificateStore"/> - and never a path and never
+    /// a password. Which certificate one run uses is a choice about that run and
+    /// belongs here; what certificates this vehicle has at all is a property of
+    /// the machine and belongs there.
+    ///
+    /// The trust anchors are not here at all, and deliberately so. A session
+    /// does not pick which roots it believes: that is what the vehicle believes,
+    /// it is every usable root of the right kind in the store, and a session
+    /// that could narrow it would be a session that could widen it.
     ///
     /// What belongs in the other two sections and not here: the battery is
     /// <see cref="VehicleConfiguration"/>, because it is what the vehicle *is*
@@ -58,11 +65,10 @@ namespace cloud.charging.open.EV.Configuration
     /// <param name="MCS">The DC message set under energy-transfer services 8/9, with a megawatt envelope. ISO 15118-20 only.</param>
     /// <param name="TLS">Which TLS stack a session runs on, if any.</param>
     /// <param name="PKIDirectory">The development hierarchy a station minted, which this vehicle reads its own chain out of.</param>
-    /// <param name="VehicleCertificate">The Vehicle certificate: who this vehicle is.</param>
-    /// <param name="TrustRoots">The V2G root(s) a station's certificate must chain to; a file or a directory of them.</param>
-    /// <param name="ContractCertificate">The contract certificate: who pays.</param>
-    /// <param name="OEMCertificate">The OEM provisioning certificate: what the vehicle was born with.</param>
-    /// <param name="TariffCertificate">The public key a station's signed tariff is checked against.</param>
+    /// <param name="VehicleCertificate">The Vehicle certificate this run presents, as a handle into the store: who this vehicle is.</param>
+    /// <param name="ContractCertificate">The contract certificate this run pays with, as a handle into the store.</param>
+    /// <param name="OEMCertificate">The OEM provisioning certificate, as a handle into the store: what the vehicle was born with.</param>
+    /// <param name="TariffCertificate">The public key a station's signed tariff is checked against, as a handle into the store.</param>
     /// <param name="TargetEnergy_kWh">Charge until this much has been delivered.</param>
     /// <param name="MaxChargingTime">Stop after this much simulated time.</param>
     /// <param name="DepartureIn">When the vehicle leaves - on the wire in ISO 15118-20, and the end of the session in both.</param>
@@ -82,7 +88,6 @@ namespace cloud.charging.open.EV.Configuration
                                               TlsStack?         TLS                           = null,
                                               String?           PKIDirectory                  = null,
                                               String?           VehicleCertificate            = null,
-                                              String?           TrustRoots                    = null,
                                               String?           ContractCertificate           = null,
                                               String?           OEMCertificate                = null,
                                               String?           TariffCertificate             = null,
@@ -109,6 +114,23 @@ namespace cloud.charging.open.EV.Configuration
         public const Int32   MaxPathLength           = 4096;
 
         /// <summary>
+        /// The longest a handle into the certificate store may be written.
+        /// </summary>
+        /// <remarks>
+        /// A handle is sixteen hexadecimal digits; the room above that is so
+        /// that somebody who pasted a whole SHA-256 fingerprint is told what is
+        /// wrong with it rather than that it is too long.
+        /// </remarks>
+        public const Int32   MaxHandleLength         = 64;
+
+        /// <summary>
+        /// The fields of this section that name a certificate in the store.
+        /// </summary>
+        public static readonly IReadOnlyList<String>  CertificateFields = [
+            "vehicleCertificate", "contractCertificate", "oemCertificate", "tariffCertificate"
+        ];
+
+        /// <summary>
         /// Every field of this section that may be taken back with an explicit
         /// null.
         /// </summary>
@@ -121,7 +143,7 @@ namespace cloud.charging.open.EV.Configuration
         /// "change nothing" means everywhere else in this file.
         /// </remarks>
         public static readonly IReadOnlySet<String>  Clearable = new HashSet<String> {
-            "connect", "protocol", "mode", "tls", "pkiDirectory", "vehicleCertificate", "trustRoots",
+            "connect", "protocol", "mode", "tls", "pkiDirectory", "vehicleCertificate",
             "contractCertificate", "oemCertificate", "tariffCertificate", "slacPeer",
             "targetEnergyKWh", "maxChargingTimeSeconds", "departureInSeconds",
             "minimumStateOfChargePercent", "renegotiate"
@@ -172,16 +194,49 @@ namespace cloud.charging.open.EV.Configuration
                                                        token.Type == JTokenType.Null)
                           );
 
+            #region Settings that used to be paths
+
+            // Refused by name rather than ignored. A field this section no
+            // longer knows would otherwise be passed over in silence - see
+            // EVConfiguration.TryParse - and somebody whose configuration was
+            // written before the store existed would get a vehicle that trusts
+            // no station at all and says nothing about why.
+
+            if (JSON.TryGetValue("trustRoots", out var staleRoots) && staleRoots.Type != JTokenType.Null)
+            {
+                Error = $"'{SectionName}.trustRoots' is no longer a setting. Trust anchors live in the " +
+                         "certificate store now: import them as v2gRoot, moRoot or oemRoot, and every " +
+                         "usable one of each kind is believed.";
+                return false;
+            }
+
+            foreach (var field in CertificateFields)
+            {
+
+                if (JSON.TryGetValue(field, out var token) &&
+                    token.Type == JTokenType.String &&
+                    token.Value<String>()?.Trim() is { Length: > 0 } written &&
+                    LooksLikeAPath(written))
+                {
+                    Error = $"'{SectionName}.{field}' names a certificate in the store and not a file, and " +
+                            $"'{written}' is a path. Import that file into the store and name what it " +
+                             "became.";
+                    return false;
+                }
+
+            }
+
+            #endregion
+
             if (!ConfigurationReader.TryReadString (JSON, "connect",             SectionName, MaxEndpointLength, out var connect,      out Error) ||
                 !ConfigurationReader.TryReadString (JSON, "protocol",            SectionName, 8,                 out var protocolText, out Error) ||
                 !ConfigurationReader.TryReadString (JSON, "mode",                SectionName, 8,                 out var modeText,     out Error) ||
                 !ConfigurationReader.TryReadString (JSON, "tls",                 SectionName, 16,                out var tlsText,      out Error) ||
                 !ConfigurationReader.TryReadString (JSON, "pkiDirectory",        SectionName, MaxPathLength,     out var pkiDirectory, out Error) ||
-                !ConfigurationReader.TryReadString (JSON, "vehicleCertificate",  SectionName, MaxPathLength,     out var vehicleCert,  out Error) ||
-                !ConfigurationReader.TryReadString (JSON, "trustRoots",          SectionName, MaxPathLength,     out var trustRoots,   out Error) ||
-                !ConfigurationReader.TryReadString (JSON, "contractCertificate", SectionName, MaxPathLength,     out var contractCert, out Error) ||
-                !ConfigurationReader.TryReadString (JSON, "oemCertificate",      SectionName, MaxPathLength,     out var oemCert,      out Error) ||
-                !ConfigurationReader.TryReadString (JSON, "tariffCertificate",   SectionName, MaxPathLength,     out var tariffCert,   out Error) ||
+                !ConfigurationReader.TryReadString (JSON, "vehicleCertificate",  SectionName, MaxHandleLength,   out var vehicleCert,  out Error) ||
+                !ConfigurationReader.TryReadString (JSON, "contractCertificate", SectionName, MaxHandleLength,   out var contractCert, out Error) ||
+                !ConfigurationReader.TryReadString (JSON, "oemCertificate",      SectionName, MaxHandleLength,   out var oemCert,      out Error) ||
+                !ConfigurationReader.TryReadString (JSON, "tariffCertificate",   SectionName, MaxHandleLength,   out var tariffCert,   out Error) ||
                 !ConfigurationReader.TryReadString (JSON, "slacPeer",            SectionName, MaxEndpointLength, out var slacPeer,     out Error) ||
                 !ConfigurationReader.TryReadNumber (JSON, "targetEnergyKWh",             SectionName, 0.001, MaxTargetEnergy_kWh,    out var targetEnergy, out Error) ||
                 !ConfigurationReader.TryReadNumber (JSON, "minimumStateOfChargePercent", SectionName, 0,     100,                    out var minimumSoC,   out Error) ||
@@ -316,7 +371,6 @@ namespace cloud.charging.open.EV.Configuration
                                 tls,
                                 pkiDirectory,
                                 vehicleCert,
-                                trustRoots,
                                 contractCert,
                                 oemCert,
                                 tariffCert,
@@ -352,7 +406,6 @@ namespace cloud.charging.open.EV.Configuration
             if (TLSWritten          is not null)  json.Add("tls",                 TLSWritten);
             if (PKIDirectory        is not null)  json.Add("pkiDirectory",        PKIDirectory);
             if (VehicleCertificate  is not null)  json.Add("vehicleCertificate",  VehicleCertificate);
-            if (TrustRoots          is not null)  json.Add("trustRoots",          TrustRoots);
             if (ContractCertificate is not null)  json.Add("contractCertificate", ContractCertificate);
             if (OEMCertificate      is not null)  json.Add("oemCertificate",      OEMCertificate);
             if (TariffCertificate   is not null)  json.Add("tariffCertificate",   TariffCertificate);
@@ -419,6 +472,28 @@ namespace cloud.charging.open.EV.Configuration
                    TlsStack.BouncyCastle  => "bc",
                    _                      => null
                };
+
+        #endregion
+
+        #region (private static) LooksLikeAPath(Written)
+
+        /// <summary>
+        /// Whether what somebody wrote is a file name rather than a handle into
+        /// the store.
+        /// </summary>
+        /// <remarks>
+        /// Only ever used to give a better sentence back. A handle that is not
+        /// in the store is refused by the store either way, so this does not
+        /// decide whether something is accepted - it decides whether somebody
+        /// is told "there is no such certificate" or "that is a path, and paths
+        /// are not how this works any more".
+        /// </remarks>
+        private static Boolean LooksLikeAPath(String Written)
+
+            => Written.Contains('/')  ||
+               Written.Contains('\\') ||
+               Written.Contains('.')  ||
+               (Written.Length > 1 && Written[1] == ':');
 
         #endregion
 

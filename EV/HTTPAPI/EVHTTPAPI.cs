@@ -26,6 +26,7 @@ using Newtonsoft.Json.Linq;
 using org.GraphDefined.Vanaheimr.Illias;
 using org.GraphDefined.Vanaheimr.Hermod.HTTP;
 
+using cloud.charging.open.EV.Certificates;
 using cloud.charging.open.EV.Logging;
 using cloud.charging.open.EV.Web;
 
@@ -223,6 +224,17 @@ namespace cloud.charging.open.EV
             AddHandler(HTTPPath.Root + "v1/configuration/session",    GetSessionConfiguration,  HTTPMethod.GET);
             AddHandler(HTTPPath.Root + "v1/configuration/session",    PutSessionConfiguration,  HTTPMethod.PUT);
 
+            // The store is a collection and is addressed like one, which is why
+            // it is not under "configuration/": what is in it is not a setting
+            // that is read and written whole, it is a set of things that are
+            // added, switched and removed one at a time.
+            AddHandler(HTTPPath.Root + "v1/certificates",             GetCertificates,          HTTPMethod.GET);
+            AddHandler(HTTPPath.Root + "v1/certificates",             PostCertificate,          HTTPMethod.POST);
+            AddHandler(HTTPPath.Root + "v1/certificates/reload",      PostCertificateReload,    HTTPMethod.POST);
+            AddHandler(HTTPPath.Root + "v1/certificates/{id}",        GetCertificate,           HTTPMethod.GET);
+            AddHandler(HTTPPath.Root + "v1/certificates/{id}",        PatchCertificate,         HTTPMethod.PATCH);
+            AddHandler(HTTPPath.Root + "v1/certificates/{id}",        DeleteCertificate,        HTTPMethod.DELETE);
+
             AddHandler(HTTPPath.Root + "v1/session",                  GetSessionConfiguration,  HTTPMethod.GET);
             AddHandler(HTTPPath.Root + "v1/session",                  PostSessionStart,         HTTPMethod.POST);
             AddHandler(HTTPPath.Root + "v1/session/stop",             PostSessionStop,          HTTPMethod.POST);
@@ -236,7 +248,8 @@ namespace cloud.charging.open.EV
 
             // Everything else below /api answers with a JSON 404 instead of
             // the single-page-application stub of the web interface.
-            foreach (var method in new[] { HTTPMethod.GET, HTTPMethod.HEAD, HTTPMethod.POST, HTTPMethod.PUT, HTTPMethod.DELETE })
+            foreach (var method in new[] { HTTPMethod.GET, HTTPMethod.HEAD, HTTPMethod.POST, HTTPMethod.PUT,
+                                           HTTPMethod.PATCH, HTTPMethod.DELETE })
                 AddHandler(HTTPPath.Root + "{path..}", UnknownPath, method);
 
         }
@@ -740,6 +753,266 @@ namespace cloud.charging.open.EV
 
         #endregion
 
+        #region (private) GetCertificates(Request) / PostCertificate(Request)
+
+        /// <summary>
+        /// GET /api/v1/certificates: everything in this vehicle's store.
+        /// </summary>
+        /// <remarks>
+        /// Grouped by kind rather than returned as one list, because the page
+        /// that reads it shows the roots this vehicle believes and the
+        /// credentials it presents as two different things - and because a flat
+        /// list would put an OEM root next to an OEM provisioning certificate
+        /// with one word between them.
+        ///
+        /// At the reading permission: what certificates a vehicle holds is not
+        /// a secret from anybody who may look at it at all, and the private
+        /// keys are not in the answer. Changing any of it needs
+        /// <see cref="Permissions.ManageCredentials"/>.
+        /// </remarks>
+        private Task<HTTPResponse> GetCertificates(HTTPRequest Request)
+        {
+
+            if (!TryAuthorize(Request, Permissions.ReadConfiguration, false, out _, out var refused))
+                return Task.FromResult(refused);
+
+            return Task.FromResult(
+                       JSONResponse(Request, HTTPStatusCode.OK, Vehicle.CertificatesJSON())
+                   );
+
+        }
+
+        /// <summary>
+        /// POST /api/v1/certificates with {"kind", "content", "password", "label"}:
+        /// put a certificate into the store.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The file arrives as base64 in <c>content</c>, which is what an
+        /// upload from the browser turns into. The password is what opens it if
+        /// it is a protected PKCS#12, is used once here, and is not kept: the
+        /// store writes what it holds without one.
+        /// </para>
+        /// <para>
+        /// Answered with 200 rather than 201 when the certificate was already
+        /// there. Importing the same file twice is the same entry - the id is
+        /// its fingerprint - so the second import created nothing.
+        /// </para>
+        /// </remarks>
+        private Task<HTTPResponse> PostCertificate(HTTPRequest Request)
+        {
+
+            if (!TryAuthorize(Request, Permissions.ManageCredentials, true, out _, out var refused))
+                return Task.FromResult(refused);
+
+            if (!TryParseJSONObject(Request, out var json, out var errorResponse))
+                return Task.FromResult(errorResponse);
+
+            if (!CertificateKindExtensions.TryParseKind(json.Value<String>("kind"), out var kind))
+                return Task.FromResult(
+                           ErrorJSON(Request, HTTPStatusCode.BadRequest,
+                                     "'kind' has to be one of " +
+                                     String.Join(", ", CertificateKindExtensions.All.Select(one => one.AsText())) + ".")
+                       );
+
+            var content = json.Value<String>("content")?.Trim();
+
+            if (content is null or { Length: 0 })
+                return Task.FromResult(
+                           ErrorJSON(Request, HTTPStatusCode.BadRequest,
+                                     "'content' has to be the certificate file, base64-encoded.")
+                       );
+
+            Byte[] bytes;
+
+            try
+            {
+                bytes = Convert.FromBase64String(content);
+            }
+            catch (FormatException)
+            {
+                return Task.FromResult(
+                           ErrorJSON(Request, HTTPStatusCode.BadRequest, "'content' is not valid base64.")
+                       );
+            }
+
+            var existed = Vehicle.Certificates.Entries.Count;
+
+            if (!Vehicle.Certificates.Import(bytes,
+                                             kind,
+                                             json.Value<String>("password"),
+                                             json.Value<String>("label"),
+                                             out var entry,
+                                             out var error))
+            {
+                return Task.FromResult(ErrorJSON(Request, HTTPStatusCode.BadRequest, error));
+            }
+
+            return Task.FromResult(
+                       JSONResponse(
+                           Request,
+                           Vehicle.Certificates.Entries.Count > existed
+                               ? HTTPStatusCode.Created
+                               : HTTPStatusCode.OK,
+                           entry.ToJSON(WithDiagnostics: true)
+                       )
+                   );
+
+        }
+
+        #endregion
+
+        #region (private) GetCertificate(Request) / PatchCertificate(Request) / DeleteCertificate(Request)
+
+        /// <summary>
+        /// GET /api/v1/certificates/{id}: one certificate.
+        /// </summary>
+        private Task<HTTPResponse> GetCertificate(HTTPRequest Request)
+        {
+
+            if (!TryAuthorize(Request, Permissions.ReadConfiguration, false, out _, out var refused))
+                return Task.FromResult(refused);
+
+            var entry = Vehicle.Certificates.Get(HandleOf(Request));
+
+            return Task.FromResult(
+                       entry is null
+                           ? ErrorJSON(Request, HTTPStatusCode.NotFound, "There is no such certificate in this store.")
+                           : JSONResponse(Request, HTTPStatusCode.OK, entry.ToJSON(WithDiagnostics: true))
+                   );
+
+        }
+
+        /// <summary>
+        /// PATCH /api/v1/certificates/{id} with {"active"} and/or {"label"}:
+        /// switch a certificate on or off, or rename it.
+        /// </summary>
+        /// <remarks>
+        /// Two things in one request because they are the only two things about
+        /// a stored certificate that can be changed at all - everything else
+        /// about it is read out of the file and is not somebody's to edit.
+        /// </remarks>
+        private Task<HTTPResponse> PatchCertificate(HTTPRequest Request)
+        {
+
+            if (!TryAuthorize(Request, Permissions.ManageCredentials, true, out _, out var refused))
+                return Task.FromResult(refused);
+
+            if (!TryParseJSONObject(Request, out var json, out var errorResponse))
+                return Task.FromResult(errorResponse);
+
+            var handle = HandleOf(Request);
+
+            if (Vehicle.Certificates.Get(handle) is null)
+                return Task.FromResult(
+                           ErrorJSON(Request, HTTPStatusCode.NotFound, "There is no such certificate in this store.")
+                       );
+
+            if (json.TryGetValue("label", out var label) && label.Type != JTokenType.Undefined)
+            {
+                if (!Vehicle.Certificates.Relabel(handle, label.Value<String>(), out _, out var relabelError))
+                    return Task.FromResult(ErrorJSON(Request, HTTPStatusCode.BadRequest, relabelError));
+            }
+
+            if (json.TryGetValue("active", out var active))
+            {
+
+                if (active.Type != JTokenType.Boolean)
+                    return Task.FromResult(
+                               ErrorJSON(Request, HTTPStatusCode.BadRequest, "'active' has to be true or false.")
+                           );
+
+                if (!Vehicle.Certificates.SetActive(handle, active.Value<Boolean>(), out _, out var activeError))
+                    return Task.FromResult(ErrorJSON(Request, HTTPStatusCode.BadRequest, activeError));
+
+            }
+
+            return Task.FromResult(
+                       JSONResponse(Request, HTTPStatusCode.OK,
+                                    Vehicle.Certificates.Get(handle)!.ToJSON(WithDiagnostics: true))
+                   );
+
+        }
+
+        /// <summary>
+        /// DELETE /api/v1/certificates/{id}: take a certificate out of the
+        /// store and delete its file.
+        /// </summary>
+        /// <remarks>
+        /// Refused while a session setting still names it, and named in the
+        /// refusal. Deleting it anyway would leave a vehicle configured to
+        /// present something that is not there, which is discovered at the next
+        /// session rather than here - and switching it off is what somebody
+        /// taking a certificate out of service usually meant.
+        /// </remarks>
+        private Task<HTTPResponse> DeleteCertificate(HTTPRequest Request)
+        {
+
+            if (!TryAuthorize(Request, Permissions.ManageCredentials, true, out _, out var refused))
+                return Task.FromResult(refused);
+
+            var handle = HandleOf(Request);
+
+            if (Vehicle.UsedBySession(handle) is { } field)
+                return Task.FromResult(
+                           ErrorJSON(Request, HTTPStatusCode.Conflict,
+                                     $"That certificate is what 'session.{field}' names. Choose another one there " +
+                                      "first, or switch this one off instead of deleting it.")
+                       );
+
+            if (!Vehicle.Certificates.Remove(handle, out var error))
+                return Task.FromResult(ErrorJSON(Request, HTTPStatusCode.NotFound, error));
+
+            return Task.FromResult(
+                       JSONResponse(Request, HTTPStatusCode.OK, Vehicle.CertificatesJSON())
+                   );
+
+        }
+
+        #endregion
+
+        #region (private) PostCertificateReload(Request)
+
+        /// <summary>
+        /// POST /api/v1/certificates/reload: read the store directory again.
+        /// </summary>
+        /// <remarks>
+        /// What the store does at every start, on demand: certificates somebody
+        /// copied into the directory are adopted, and entries whose files are
+        /// gone are dropped. It exists because putting a file in a directory is
+        /// a perfectly good way to install a certificate on a machine somebody
+        /// already has a shell on, and having to restart the vehicle to be
+        /// noticed would make it a worse one.
+        /// </remarks>
+        private Task<HTTPResponse> PostCertificateReload(HTTPRequest Request)
+        {
+
+            if (!TryAuthorize(Request, Permissions.ManageCredentials, true, out _, out var refused))
+                return Task.FromResult(refused);
+
+            Vehicle.Certificates.Reload();
+
+            return Task.FromResult(
+                       JSONResponse(Request, HTTPStatusCode.OK, Vehicle.CertificatesJSON())
+                   );
+
+        }
+
+        #endregion
+
+        #region (private static) HandleOf(Request)
+
+        /// <summary>
+        /// The certificate handle out of the request's path.
+        /// </summary>
+        private static String HandleOf(HTTPRequest Request)
+
+            => Request.ParsedURLParameters.Length > 0
+                   ? Request.ParsedURLParameters[0].Trim()
+                   : "";
+
+        #endregion
+
         #region (private static) PermissionsForSession(JSON)
 
         /// <summary>
@@ -763,7 +1036,7 @@ namespace cloud.charging.open.EV
 
             var required = Permissions.None;
 
-            foreach (var field in new[] { "pkiDirectory", "vehicleCertificate", "trustRoots",
+            foreach (var field in new[] { "pkiDirectory", "vehicleCertificate",
                                           "contractCertificate", "oemCertificate", "tariffCertificate" })
                 if (JSON.ContainsKey(field))
                     required |= Permissions.ManageCredentials;

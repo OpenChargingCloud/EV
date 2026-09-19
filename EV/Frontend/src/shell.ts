@@ -32,6 +32,7 @@ export const menu: MenuEntry[] = [
             { path: '/configuration/nts',      label: 'NTS client',    icon: 'fa-clock'                     },
             { path: '/configuration/vehicle',  label: 'Vehicle',       icon: 'fa-car-side'                  },
             { path: '/configuration/v2g',      label: 'ISO 15118',     icon: 'fa-tower-broadcast'           },
+            { path: '/configuration/certificates', label: 'Certificates', icon: 'fa-certificate'            },
             { path: '/configuration/session',  label: 'Charging',      icon: 'fa-bolt'                      }
         ]
     },

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2014-2026 GraphDefined GmbH <achim.friedland@graphdefined.com>
  * This file is part of EV <https://github.com/OpenChargingCloud/EV>
  *
@@ -28,6 +28,7 @@ using cloud.charging.open.protocols.ISO15118.Simulation;
 using cloud.charging.open.protocols.ISO15118.StateMachines;
 using cloud.charging.open.protocols.ISO15118.Transport;
 
+using cloud.charging.open.EV.Certificates;
 using cloud.charging.open.EV.Configuration;
 using cloud.charging.open.EV.ISO15118;
 
@@ -99,9 +100,10 @@ namespace cloud.charging.open.EV
         public SessionConfiguration   SessionSettings  { get; private set; } = new ();
 
         /// <summary>
-        /// What opens the PKCS#12 files the settings above name. Never written down, and never on the API.
+        /// Every certificate this vehicle has: the roots it believes, and the credentials the settings
+        /// above choose from.
         /// </summary>
-        public CertificatePasswords   Passwords        { get; }
+        public CertificateStore       Certificates     { get; }
 
         /// <summary>
         /// Whether a session is running right now.
@@ -470,12 +472,15 @@ namespace cloud.charging.open.EV
                        TLS                  = settings.TLS       ?? TlsStack.None,
 
                        PKIDirectory         = settings.PKIDirectory,
-                       VehicleCertificate   = settings.VehicleCertificate,
-                       TrustRoots           = settings.TrustRoots,
-                       ContractCertificate  = settings.ContractCertificate,
-                       OEMCertificate       = settings.OEMCertificate,
-                       TariffCertificate    = settings.TariffCertificate,
-                       Passwords            = Passwords,
+
+                       VehicleCertificate   = Resolve(settings.VehicleCertificate,  CertificateKind.Vehicle,            "vehicleCertificate"),
+                       ContractCertificate  = Resolve(settings.ContractCertificate, CertificateKind.Contract,           "contractCertificate"),
+                       OEMCertificate       = Resolve(settings.OEMCertificate,      CertificateKind.OEMProvisioning,    "oemCertificate"),
+                       TariffCertificate    = Resolve(settings.TariffCertificate,   CertificateKind.TariffVerification, "tariffCertificate"),
+
+                       V2GRoots             = Certificates.ValidatorFor(CertificateKind.V2GRoot),
+                       MORoots              = Certificates.ValidatorFor(CertificateKind.MORoot),
+                       OEMRoots             = Certificates.ValidatorFor(CertificateKind.OEMRoot),
 
                        Battery              = BuildBattery(),
 
@@ -489,6 +494,69 @@ namespace cloud.charging.open.EV
                        Resume               = resume
 
                    };
+
+        }
+
+        #endregion
+
+        #region (private) Resolve(Handle, Kind, Field)
+
+        /// <summary>
+        /// One of the session's certificate handles, as the file a loader can open.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Refused rather than skipped, and refused here rather than at the handshake. A session that named
+        /// a certificate somebody has since switched off, deleted or let expire is a session whose operator
+        /// believes it is charging under that contract - so it does not quietly run without one. The
+        /// exception lands in the session's own error handling and comes back as a failed session naming
+        /// the certificate, which is the shortest path from the symptom to the cause.
+        /// </para>
+        /// <para>
+        /// The kind is checked again although
+        /// <see cref="TryUpdateSessionConfiguration"/> checked it when the setting was made: the store can
+        /// change under a setting that was good when it was written, and by this point it is being handed
+        /// to a loader that would read it as something it is not.
+        /// </para>
+        /// </remarks>
+        private String? Resolve(String?          Handle,
+                                CertificateKind  Kind,
+                                String           Field)
+        {
+
+            if (Handle is null)
+                return null;
+
+            var entry = Certificates.Get(Handle)
+                            ?? throw new ArgumentException(
+                                   $"session.{Field}: there is no certificate '{Handle}' in this vehicle's store " +
+                                    "any more. Choose another one, or import it again.");
+
+            if (entry.Kind != Kind)
+                throw new ArgumentException(
+                          $"session.{Field}: '{entry.Label}' is a {entry.Kind.AsText()} and this names a " +
+                          $"{Kind.AsText()}.");
+
+            if (!entry.IsActive)
+                throw new ArgumentException(
+                          $"session.{Field}: '{entry.Label}' is switched off in the certificate store. " +
+                           "Switch it on, or choose another one.");
+
+            if (entry.IsExpired)
+                throw new ArgumentException(
+                          $"session.{Field}: '{entry.Label}' expired on {entry.NotAfter.UtcDateTime:yyyy-MM-dd}.");
+
+            if (entry.IsNotYetValid)
+                throw new ArgumentException(
+                          $"session.{Field}: '{entry.Label}' is not valid until {entry.NotBefore.UtcDateTime:yyyy-MM-dd}.");
+
+            var path = Certificates.FullPath(entry);
+
+            return File.Exists(path)
+                       ? path
+                       : throw new ArgumentException(
+                             $"session.{Field}: '{entry.Label}' is in the index and its file '{entry.FileName}' " +
+                              "is gone. Import it again.");
 
         }
 

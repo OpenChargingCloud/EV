@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2014-2026 GraphDefined GmbH <achim.friedland@graphdefined.com>
  * This file is part of EV <https://github.com/OpenChargingCloud/EV>
  *
@@ -108,19 +108,26 @@ namespace cloud.charging.open.EV.ISO15118
             var started  = DateTimeOffset.UtcNow;
             var watch    = Stopwatch.StartNew();
 
-            #region Whose word this vehicle takes for a station
+            #region Whose word this vehicle takes, and for what
 
-            V2GChainValidator? trust = null;
+            // Three questions, three answers, and none of them stands in for
+            // another. The store built these out of its active roots, so a root
+            // switched off between two sessions is believed in the first and not
+            // in the second, without anything here having to know that happened.
 
-            if (Options.TrustRoots is not null)
-            {
+            var trust = Options.V2GRoots;
 
-                trust = TrustRoots.Load(Options.TrustRoots, "session.trustRoots");
-
+            if (trust is not null)
                 Log.Info($"TLS: a station's certificate has to chain to {String.Join(", ", trust.RootSubjects)}.",
                          "15118", "tls");
 
-            }
+            if (Options.MORoots is not null)
+                Log.Info($"Plug & Charge: a contract certificate has to chain to {String.Join(", ", Options.MORoots.RootSubjects)}.",
+                         "15118", "pnc");
+
+            if (Options.OEMRoots is not null)
+                Log.Info($"CertificateInstallation: an OEM provisioning certificate has to chain to {String.Join(", ", Options.OEMRoots.RootSubjects)}.",
+                         "15118", "pnc");
 
             #endregion
 
@@ -221,10 +228,10 @@ namespace cloud.charging.open.EV.ISO15118
                        };
 
             if (Options.ContractCertificate is not null)
-                evcc.Pnc = VehicleCredentials.LoadContract(Options.ContractCertificate, Options.Passwords.Contract, Log);
+                evcc.Pnc = VehicleCredentials.LoadContract(Options.ContractCertificate, Options.MORoots, Log);
 
             if (Options.TariffCertificate is not null)
-                evcc.TariffVerifyKey = VehicleCredentials.LoadTariffVerifyKey(Options.TariffCertificate, Options.Passwords.Tariff, Log);
+                evcc.TariffVerifyKey = VehicleCredentials.LoadTariffVerifyKey(Options.TariffCertificate, Log);
 
             // Accepted and refused nowhere, and there is no -2 path that uses
             // it: this vehicle implements CertificateInstallation only for -20.
@@ -325,13 +332,13 @@ namespace cloud.charging.open.EV.ISO15118
                 evcc.DepartureTime = departure;
 
             if (Options.ContractCertificate is not null)
-                evcc.Pnc = VehicleCredentials.LoadContract(Options.ContractCertificate, Options.Passwords.Contract, Log);
+                evcc.Pnc = VehicleCredentials.LoadContract(Options.ContractCertificate, Options.MORoots, Log);
 
             if (Options.OEMCertificate is not null)
-                evcc.CertInstallRequest = VehicleCredentials.LoadOEM(Options.OEMCertificate, Options.Passwords.OEM, Log);
+                evcc.CertInstallRequest = VehicleCredentials.LoadOEM(Options.OEMCertificate, Options.OEMRoots, Log);
 
             if (Options.TariffCertificate is not null)
-                evcc.TariffVerifyKey = VehicleCredentials.LoadTariffVerifyKey(Options.TariffCertificate, Options.Passwords.Tariff, Log);
+                evcc.TariffVerifyKey = VehicleCredentials.LoadTariffVerifyKey(Options.TariffCertificate, Log);
 
             await evcc.RunAsync(CancellationToken);
 
@@ -344,10 +351,51 @@ namespace cloud.charging.open.EV.ISO15118
             if (evcc.Battery is { } battery && evcc.BatteryStop is { } stop)
                 Log.Notice($"Battery: {battery.Describe(stop)}", "15118", "session");
 
-            if (evcc.InstalledContractCertificate is not null)
+            var installedChainsTo = (String?) null;
+
+            if (evcc.InstalledContractCertificate is { } installed)
+            {
+
                 Log.Notice("CertificateInstallation: a contract certificate was issued and its private key unwrapped - " +
                            "the ECDH/AES-GCM round trip closed.",
                            "15118", "pnc");
+
+                // The one chain check that is about somebody else's word. The
+                // rest of this vehicle's certificates were put there by its
+                // operator; this one arrived over the wire from a station, and
+                // the signature over the response says only that the CPS signed
+                // what it sent - not that the contract belongs to a Mobility
+                // Operator this vehicle has any reason to believe.
+                //
+                // Reported and not thrown: the session has already charged by
+                // the time this runs, and a contract that was installed is a
+                // fact whether or not it chains. What would be wrong is letting
+                // it pass unremarked.
+                if (Options.MORoots is null)
+                    Log.Warning("CertificateInstallation: nothing vouches for the contract certificate the station " +
+                                "issued - this vehicle holds no Mobility Operator root. Import one as \"moRoot\" to " +
+                                "have the issued chain checked.",
+                                "15118", "pnc");
+
+                else
+                {
+
+                    var verdict = Options.MORoots.Validate(installed, evcc.InstalledContractSubCertificates);
+
+                    if (verdict.Ok)
+                    {
+                        installedChainsTo = verdict.Anchor;
+                        Log.Notice($"CertificateInstallation: the issued contract certificate chains to {verdict.Anchor}.",
+                                   "15118", "pnc");
+                    }
+                    else
+                        Log.Error($"CertificateInstallation: the issued contract certificate does NOT chain to any " +
+                                  $"Mobility Operator root this vehicle holds - {verdict.Reason}.",
+                                  "15118", "pnc");
+
+                }
+
+            }
 
             else if (Options.OEMCertificate is not null)
                 Log.Warning("CertificateInstallation: not completed - the station either did not offer the service " +
@@ -382,6 +430,7 @@ namespace cloud.charging.open.EV.ISO15118
                            new JProperty("resumeRefused",     evcc.ResumeRefused),
                            new JProperty("sameStation",       evcc.ResumedStationVerified),
                            new JProperty("contractInstalled", evcc.InstalledContractCertificate is not null),
+                           new JProperty("contractChainsTo",  installedChainsTo),
                            new JProperty("battery",           BatteryJSON(evcc.Battery, evcc.BatteryStop)),
                            new JProperty("tariff",            evcc.Tariff is null
                                                                   ? null
@@ -420,7 +469,6 @@ namespace cloud.charging.open.EV.ISO15118
 
                     var bc = VehicleCredentials.BouncyCastleOptions(
                                  Options.VehicleCertificate,
-                                 Options.Passwords.Vehicle,
                                  Options.PKIDirectory,
                                  Log
                              );
@@ -449,7 +497,7 @@ namespace cloud.charging.open.EV.ISO15118
                                     "A handshake that succeeds here says this vehicle was authenticated, not the station.",
                                     "15118", "tls");
 
-                    var (leaf, chain) = Credentials.LoadForTls(Options.VehicleCertificate, Options.Passwords.Vehicle,
+                    var (leaf, chain) = Credentials.LoadForTls(Options.VehicleCertificate, null,
                                                                "session.vehicleCertificate");
 
                     if (leaf is not null)

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2014-2026 GraphDefined GmbH <achim.friedland@graphdefined.com>
  * This file is part of EV <https://github.com/OpenChargingCloud/EV>
  *
@@ -17,6 +17,7 @@
 
 #region Usings
 
+using cloud.charging.open.protocols.ISO15118.Security;
 using cloud.charging.open.protocols.ISO15118.SharedCC;
 using cloud.charging.open.protocols.ISO15118.Session;
 using cloud.charging.open.protocols.ISO15118.Simulation;
@@ -89,14 +90,22 @@ namespace cloud.charging.open.EV.ISO15118
 
         #region What this vehicle holds up
 
+        /// <summary>
+        /// The four credentials below arrive here as paths into the certificate store, already chosen and
+        /// already checked.
+        /// </summary>
+        /// <remarks>
+        /// Paths rather than handles, because by the time a session starts the choosing is over: the store
+        /// resolved the handle, refused what was switched off or expired, and what is left is a file the
+        /// loaders in <see cref="VehicleCredentials"/> can open. And no passwords, because the store keeps
+        /// what it holds without one - which is why this record no longer carries any.
+        /// </remarks>
+
         /// <summary>The development hierarchy a station minted, which this vehicle reads its chain out of.</summary>
         public String?                        PKIDirectory         { get; init; }
 
         /// <summary>The Vehicle certificate: who this vehicle is.</summary>
         public String?                        VehicleCertificate   { get; init; }
-
-        /// <summary>The V2G root(s) a station's certificate must chain to; a file or a directory of them.</summary>
-        public String?                        TrustRoots           { get; init; }
 
         /// <summary>The contract certificate: who pays.</summary>
         public String?                        ContractCertificate  { get; init; }
@@ -107,8 +116,36 @@ namespace cloud.charging.open.EV.ISO15118
         /// <summary>The public key a station's signed tariff is checked against.</summary>
         public String?                        TariffCertificate    { get; init; }
 
-        /// <summary>What opens the four files above. Never written down, never on the API.</summary>
-        public CertificatePasswords           Passwords            { get; init; } = CertificatePasswords.None;
+        #endregion
+
+        #region What this vehicle believes
+
+        /// <summary>
+        /// The three sets of trust anchors, each already built from every usable root of its kind in the
+        /// store, and null where there is none of that kind.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Null and "an empty set of roots" are not the same answer and are never conflated - see
+        /// <c>CertificateStore.ValidatorFor</c>. Null means this vehicle was never told what to believe
+        /// about that kind of chain and says so; a validator means it was, and a chain that does not
+        /// satisfy it is refused.
+        /// </para>
+        /// <para>
+        /// Three rather than one, because they answer three different questions. Pooling them would let an
+        /// OEM root vouch for a contract, which is the difference between a vehicle that checks who is
+        /// charging it and one that checks that somebody signed something.
+        /// </para>
+        /// </remarks>
+
+        /// <summary>What a station's certificate must chain to.</summary>
+        public V2GChainValidator?             V2GRoots             { get; init; }
+
+        /// <summary>What a contract certificate must chain to - this vehicle's own, and any a station issues.</summary>
+        public V2GChainValidator?             MORoots              { get; init; }
+
+        /// <summary>What an OEM provisioning certificate must chain to.</summary>
+        public V2GChainValidator?             OEMRoots             { get; init; }
 
         #endregion
 
