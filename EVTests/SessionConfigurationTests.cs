@@ -17,6 +17,8 @@
 
 #region Usings
 
+using cloud.charging.open.protocols.ISO15118.T1S.Transport;
+
 using Newtonsoft.Json.Linq;
 
 using NUnit.Framework;
@@ -349,6 +351,162 @@ namespace cloud.charging.open.EV.Tests
 
         #endregion
 
+        #region The bus: t1sTransport, t1sBus, t1sInterface, t1sWeight
+
+        [Test]
+        public void TheBusIsWrittenAndReadBack()
+        {
+
+            var written = new SessionConfiguration(
+                              T1SBus:        "239.151.18.1:2354",
+                              T1STransport:  T1STransportKind.AfPacket,
+                              T1SInterface:  "eth1",
+                              T1SWeight:     5
+                          ).ToJSON();
+
+            Assert.That(written.Value<String>("t1sTransport"),  Is.EqualTo("afpacket"));
+            Assert.That(written.Value<String>("t1sBus"),        Is.EqualTo("239.151.18.1:2354"));
+            Assert.That(written.Value<String>("t1sInterface"),  Is.EqualTo("eth1"));
+            Assert.That(written.Value<Int32> ("t1sWeight"),     Is.EqualTo(5));
+
+            Assert.That(SessionConfiguration.TryParse(written, out var read, out var error), Is.True, error);
+
+            Assert.That(read!.T1STransport,          Is.EqualTo(T1STransportKind.AfPacket));
+            Assert.That(read.T1STransportInEffect,   Is.EqualTo(T1STransportKind.AfPacket));
+            Assert.That(read.T1SBusEndpoint,         Is.Not.Null);
+            Assert.That(read.T1SBusEndpoint!.Port,   Is.EqualTo(2354));
+            Assert.That(read.T1SInterface,           Is.EqualTo("eth1"));
+            Assert.That(read.T1SWeight,              Is.EqualTo(5));
+            Assert.That(read.T1SWeightInEffect,      Is.EqualTo(5));
+
+        }
+
+        [Test]
+        public void NothingSaidMeansNoBus()
+        {
+
+            Assert.That(SessionConfiguration.TryParse(new JObject(), out var read, out var error), Is.True, error);
+
+            Assert.That(read!.T1STransport,          Is.Null);
+            Assert.That(read.T1STransportInEffect,   Is.EqualTo(T1STransportKind.None));
+            Assert.That(read.T1SWeightInEffect,      Is.EqualTo(SessionConfiguration.DefaultT1SWeight));
+            Assert.That(read.T1SBusEndpoint,         Is.Null);
+
+        }
+
+        [Test]
+        public void ABusAloneMeansTheEmulatedMedium()
+        {
+
+            // A group is a thing only the emulated medium has, so naming one
+            // says which medium without a second field - which is what a bench
+            // that only knows its group is entitled to.
+            Assert.That(SessionConfiguration.TryParse(new JObject(new JProperty("t1sBus", "239.151.18.1:16118")),
+                                                      out var read, out var error),
+                        Is.True, error);
+
+            Assert.That(read!.T1STransport,          Is.Null, "the file did not say");
+            Assert.That(read.T1STransportInEffect,   Is.EqualTo(T1STransportKind.UDP));
+
+        }
+
+        [Test]
+        [TestCase("none",      T1STransportKind.None)]
+        [TestCase("Auto",      T1STransportKind.Auto)]
+        [TestCase("AF_PACKET", T1STransportKind.AfPacket)]
+        [TestCase("udp",       T1STransportKind.UDP)]
+        public void EveryTransportWordIsRead(String Written, T1STransportKind Expected)
+        {
+
+            Assert.That(SessionConfiguration.TryParse(new JObject(new JProperty("t1sTransport", Written)),
+                                                      out var read, out var error),
+                        Is.True, error);
+
+            Assert.That(read!.T1STransport,  Is.EqualTo(Expected));
+
+        }
+
+        [Test]
+        public void AnUnknownTransportIsRefusedByName()
+        {
+
+            Assert.That(SessionConfiguration.TryParse(new JObject(new JProperty("t1sTransport", "pcap")),
+                                                      out _, out var error),
+                        Is.False);
+
+            Assert.That(error, Does.Contain("session.t1sTransport"));
+            Assert.That(error, Does.Contain("afpacket"));
+
+        }
+
+        [Test]
+        [TestCase("127.0.0.1:2354",         "not a group")]
+        [TestCase("239.151.18.1",           "no port")]
+        [TestCase("[ff02::1]:2354",         "IPv6")]
+        [TestCase("bus.example.org:2354",   "a name")]
+        [TestCase("239.151.18.1:0",         "port zero")]
+        public void ABusThatIsNotAnIPv4GroupIsRefused(String Written, String Why)
+        {
+
+            Assert.That(SessionConfiguration.TryParse(new JObject(new JProperty("t1sBus", Written)),
+                                                      out _, out var error),
+                        Is.False, Why);
+
+            Assert.That(error, Does.Contain("session.t1sBus"));
+            Assert.That(error, Does.Contain("multicast"));
+
+        }
+
+        [Test]
+        [TestCase(0)]
+        [TestCase(9)]
+        public void AWeightOutsideTheBusIsRefused(Int32 Written)
+        {
+
+            Assert.That(SessionConfiguration.TryParse(new JObject(new JProperty("t1sWeight", Written)),
+                                                      out _, out var error),
+                        Is.False);
+
+            Assert.That(error, Does.Contain("session.t1sWeight"));
+
+        }
+
+        [Test]
+        public void AnInterfaceOfSpacesIsNothingNamed()
+        {
+
+            // The reader's convention for every string here: blank is the
+            // same as absent, and absent takes the default - the V2G
+            // interface for an adapter, the operating system's pick for udp.
+            Assert.That(SessionConfiguration.TryParse(new JObject(new JProperty("t1sInterface", "   ")),
+                                                      out var read, out var error),
+                        Is.True, error);
+
+            Assert.That(read!.T1SInterface, Is.Null);
+
+        }
+
+        [Test]
+        public void TheBusCanBeTakenBack()
+        {
+
+            // An explicit null on every one of the four is how a CCS bench is
+            // made of an MCS one again.
+            var json = new JObject(
+                           new JProperty("t1sTransport",  JValue.CreateNull()),
+                           new JProperty("t1sBus",        JValue.CreateNull()),
+                           new JProperty("t1sInterface",  JValue.CreateNull()),
+                           new JProperty("t1sWeight",     JValue.CreateNull())
+                       );
+
+            Assert.That(SessionConfiguration.TryParse(json, out var read, out var error), Is.True, error);
+
+            Assert.That(read!.Cleared, Is.SupersetOf(new[] { "t1sTransport", "t1sBus", "t1sInterface", "t1sWeight" }));
+
+        }
+
+        #endregion
+
         #region EveryClearableFieldIsAFieldThisSectionHas()
 
         [Test]
@@ -374,7 +532,11 @@ namespace cloud.charging.open.EV.Tests
                                  DepartureIn:                   TimeSpan.FromMinutes(20),
                                  MinimumStateOfCharge_percent:  50,
                                  Renegotiate:                   false,
-                                 SLACPeer:                      "127.0.0.1:9000"
+                                 SLACPeer:                      "127.0.0.1:9000",
+                                 T1SBus:                        "239.151.18.1:2354",
+                                 T1STransport:                  T1STransportKind.UDP,
+                                 T1SInterface:                  "eth1",
+                                 T1SWeight:                     3
                              ).ToJSON();
 
             foreach (var field in SessionConfiguration.Clearable)

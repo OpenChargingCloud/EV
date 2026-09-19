@@ -27,6 +27,7 @@ using cloud.charging.open.protocols.ISO15118.SharedCC;
 using cloud.charging.open.protocols.ISO15118.Simulation;
 using cloud.charging.open.protocols.ISO15118.StateMachines;
 using cloud.charging.open.protocols.ISO15118.Transport;
+using cloud.charging.open.protocols.ISO15118.T1S.Transport;
 
 using cloud.charging.open.EV.Certificates;
 using cloud.charging.open.EV.Configuration;
@@ -180,6 +181,35 @@ namespace cloud.charging.open.EV
 
                 }
 
+                // Or the coupler's bus, on a Megawatt Charging System: joined
+                // here, before SDP, and left when the session ends - which is
+                // what the "await using" is. A vehicle on a T1S bus is a node
+                // the station asks every cycle, for as long as it is plugged
+                // in, and a session that attached and never left would leave
+                // the station polling a node that had driven away.
+                JObject? t1s = null;
+
+                await using var bus = SessionSettings.T1STransportInEffect != T1STransportKind.None
+                                          ? await V2GLink.AttachAsync(
+                                                V2GLink.T1SMediumFor(SessionSettings, V2GSettings.InterfaceName),
+                                                SessionSettings.T1SWeightInEffect,
+                                                Log,
+                                                CancellationToken:  cancellation.Token
+                                            )
+                                          : null;
+
+                if (bus is not null)
+                {
+
+                    t1s = bus.JSON;
+
+                    if (!bus.IsAttached && !bus.IsDeclined)
+                        return Remember(Failed("t1sFailed",
+                                               t1s.Value<String>("error") ?? "The vehicle could not join the coupler's bus.",
+                                               slac, T1S: t1s));
+
+                }
+
                 #endregion
 
                 #region Where to
@@ -264,6 +294,9 @@ namespace cloud.charging.open.EV
                 if (slac is not null)
                     result["slac"] = slac;
 
+                if (t1s is not null)
+                    result["t1s"] = t1s;
+
                 return Remember(result);
 
             }
@@ -337,6 +370,64 @@ namespace cloud.charging.open.EV
                        Log,
                        CancellationToken
                    );
+
+        }
+
+        #endregion
+
+        #region AttachToBusAsync(CancellationToken = default)
+
+        /// <summary>
+        /// Join the coupler's 10BASE-T1S bus on its own, against the configured
+        /// bus, stay on it long enough to be asked a few times, and leave.
+        /// </summary>
+        /// <remarks>
+        /// A session does this by itself where a bus is configured, so this is
+        /// here for the same reason the SLAC stage has one: joining and then
+        /// finding no station over SDP is a different link from never being
+        /// given a node identifier at all, and asking the two questions
+        /// separately is what tells them apart.
+        ///
+        /// Stays on the bus for two seconds before leaving, so that the
+        /// station's log shows this vehicle being asked and answering rather
+        /// than a node that joined and left within one cycle.
+        /// </remarks>
+        public async Task<JObject> AttachToBusAsync(CancellationToken CancellationToken = default)
+        {
+
+            if (SessionSettings.T1STransportInEffect == T1STransportKind.None)
+                return new JObject(
+                           new JProperty("outcome",  "notConfigured"),
+                           new JProperty("error",    "No T1S transport is configured.")
+                       );
+
+            if (SessionRunning)
+                return new JObject(
+                           new JProperty("outcome",  "busy"),
+                           new JProperty("error",    "A session is running on this vehicle, and it is already on the bus.")
+                       );
+
+            await using var bus = await V2GLink.AttachAsync(
+                                      V2GLink.T1SMediumFor(SessionSettings, V2GSettings.InterfaceName),
+                                      SessionSettings.T1SWeightInEffect,
+                                      Log,
+                                      CancellationToken:  CancellationToken
+                                  );
+
+            if (bus.IsAttached)
+            {
+
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(2), CancellationToken);
+                }
+                catch (OperationCanceledException) { }
+
+                bus.JSON["stayed_ms"] = 2000;
+
+            }
+
+            return bus.JSON;
 
         }
 
@@ -602,7 +693,8 @@ namespace cloud.charging.open.EV
                                       String    Error,
                                       JObject?  SLAC        = null,
                                       JObject?  Discovery   = null,
-                                      JObject?  PausedRun   = null)
+                                      JObject?  PausedRun   = null,
+                                      JObject?  T1S         = null)
         {
 
             var json = new JObject(
@@ -611,6 +703,7 @@ namespace cloud.charging.open.EV
                        );
 
             if (SLAC      is not null)  json.Add("slac",      SLAC);
+            if (T1S       is not null)  json.Add("t1s",       T1S);
             if (Discovery is not null)  json.Add("discovery", Discovery);
             if (PausedRun is not null)  json.Add("pausedRun", PausedRun);
 

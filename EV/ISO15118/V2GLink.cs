@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2014-2026 GraphDefined GmbH <achim.friedland@graphdefined.com>
  * This file is part of EV <https://github.com/OpenChargingCloud/EV>
  *
@@ -29,6 +29,9 @@ using cloud.charging.open.protocols.ISO15118.SharedCC;
 using cloud.charging.open.protocols.ISO15118.Slac;
 using cloud.charging.open.protocols.ISO15118.SLAC.StateMachine;
 using cloud.charging.open.protocols.ISO15118.SLAC.Transport;
+using cloud.charging.open.protocols.ISO15118.T1S;
+using cloud.charging.open.protocols.ISO15118.T1S.PLCA;
+using cloud.charging.open.protocols.ISO15118.T1S.Transport;
 
 using cloud.charging.open.EV.Configuration;
 using cloud.charging.open.EV.Logging;
@@ -380,6 +383,256 @@ namespace cloud.charging.open.EV.ISO15118
         #endregion
 
 
+        #region T1SMediumFor(Settings, V2GInterfaceName)
+
+        /// <summary>
+        /// What medium a session attaches to, from the session settings and
+        /// the V2G interface.
+        /// </summary>
+        /// <remarks>
+        /// The adapter is the V2G interface unless another is named, because
+        /// on a real MCS the 10BASE-T1S link is the link the V2G traffic is
+        /// on. The emulated medium joins its group wherever the operating
+        /// system says unless told - a laptop's one cable is the right guess
+        /// and its V2G interface, which may be a virtual one with no IPv4
+        /// address at all, is not.
+        /// </remarks>
+        public static T1STransportOptions T1SMediumFor(SessionConfiguration  Settings,
+                                                       String?               V2GInterfaceName)
+        {
+
+            var kind = Settings.T1STransportInEffect;
+
+            return new T1STransportOptions(
+                       Kind:           kind,
+                       InterfaceName:  Settings.T1SInterface ??
+                                           (kind is T1STransportKind.AfPacket or T1STransportKind.Auto
+                                                ? V2GInterfaceName
+                                                : null),
+                       Group:          Settings.T1SBusEndpoint
+                   );
+
+        }
+
+        #endregion
+
+        #region AttachAsync(Medium, Weight, Log, Timeout = null, CancellationToken = default)
+
+        /// <summary>
+        /// The 10BASE-T1S attach stage of a Megawatt Charging System coupler:
+        /// join the coupler's bus as the vehicle, and stay on it until told to
+        /// leave.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// What SLAC is to CCS, this is to MCS. There is no powerline under a
+        /// megawatt coupler and nothing to sound; the link is IEEE 802.3cg
+        /// 10BASE-T1S, a multidrop twisted pair the station coordinates with
+        /// PLCA, and the vehicle is one node on it beside the temperature
+        /// sensors in the pins. Attaching means waiting for the station's
+        /// BEACON, asking for a node identifier in the discovery opportunity,
+        /// and being given one - after which the station asks this vehicle
+        /// every cycle whether it has anything to say, more often than it asks
+        /// anybody else.
+        /// </para>
+        /// <para>
+        /// Unlike a SLAC pairing this does not end when it succeeds: the
+        /// vehicle is on the bus for as long as it is plugged in, and the
+        /// coordinator gives it up for lost if it goes quiet. So what comes
+        /// back is not only a report but a handle, and disposing of the handle
+        /// is leaving the bus - which a session does when it ends.
+        /// </para>
+        /// <para>
+        /// Over whichever medium the options name: the emulated one, which
+        /// is UDP multicast, or a real adapter through AF_PACKET. Asking for
+        /// the adapter where there is none is a failure; leaving the choice
+        /// to Auto on a machine without one is not - the vehicle says so and
+        /// carries on, which is what "auto" means.
+        /// </para>
+        /// </remarks>
+        /// <param name="Medium">Which medium, and where.</param>
+        /// <param name="Weight">How many transmit opportunities per cycle to ask for.</param>
+        /// <param name="Log">Where the attaching is written while it happens.</param>
+        /// <param name="Timeout">How long to wait for the station's BEACON and identifier.</param>
+        /// <param name="CancellationToken">Abort the attaching.</param>
+        public static async Task<T1SAttachment> AttachAsync(T1STransportOptions  Medium,
+                                                            Byte                 Weight,
+                                                            EventLog             Log,
+                                                            TimeSpan?            Timeout             = null,
+                                                            CancellationToken    CancellationToken   = default)
+        {
+
+            var started     = DateTimeOffset.UtcNow;
+            var watch       = Stopwatch.StartNew();
+            var timeout     = Timeout ?? TimeSpan.FromSeconds(10);
+            var mediumText  = Medium.Kind.Write();
+            var mediumKind  = Medium.Kind;
+
+            Log.Notice($"T1S: joining the coupler's bus over {mediumText} as the vehicle.", "15118", "t1s");
+
+            IT1STransport?  transport  = null;
+            PlcaFollower?   follower   = null;
+
+            try
+            {
+
+                var opened = T1STransports.Open(Medium);
+
+                if (opened.IsFailed)
+                {
+
+                    Log.Error($"T1S: could not join the bus: {opened.Error}", "15118", "t1s");
+
+                    return new T1SAttachment(
+                               null,
+                               null,
+                               new JObject(
+                                   new JProperty("outcome",     "noMedium"),
+                                   new JProperty("startedAt",   started.ToString("o")),
+                                   new JProperty("elapsed_ms",  Math.Round(watch.Elapsed.TotalMilliseconds, 1)),
+                                   new JProperty("transport",   opened.Kind.Write()),
+                                   new JProperty("error",       opened.Error)
+                               )
+                           );
+
+                }
+
+                if (opened.Transport is null)
+                {
+
+                    Log.Notice($"T1S: {opened.Reason}", "15118", "t1s");
+
+                    return new T1SAttachment(
+                               null,
+                               null,
+                               new JObject(
+                                   new JProperty("outcome",     "declined"),
+                                   new JProperty("startedAt",   started.ToString("o")),
+                                   new JProperty("elapsed_ms",  Math.Round(watch.Elapsed.TotalMilliseconds, 1)),
+                                   new JProperty("transport",   opened.Kind.Write()),
+                                   new JProperty("reason",      opened.Reason)
+                               )
+                           );
+
+                }
+
+                transport   = opened.Transport;
+                mediumText  = transport.Description;
+                mediumKind  = opened.Kind;
+
+                follower    = new PlcaFollower(
+                                  transport,
+                                  new PlcaFollowerOptions(
+                                      Role:             T1SNodeRole.Vehicle,
+                                      Name:             "EV",
+                                      RequestedWeight:  Weight
+                                  )
+                              );
+
+                follower.Log       += (_, line)   => Log.Debug($"T1S: {line}", "15118", "t1s");
+                follower.Detached  += (_, reason) => Log.Warning($"T1S: off the bus - {reason}.", "15118", "t1s");
+
+                await transport.StartAsync(CancellationToken);
+                await follower. StartAsync(CancellationToken);
+
+                if (!await follower.WaitUntilAttachedAsync(timeout, CancellationToken))
+                {
+
+                    var why = follower.Coordinator is null
+                                  ? $"no BEACON was heard on {mediumText} in {timeout.TotalSeconds:F0} s - is a station coordinating that bus?"
+                                  : $"the coordinator at {follower.Coordinator} heard this vehicle and did not answer in {timeout.TotalSeconds:F0} s.";
+
+                    Log.Error($"T1S: could not join the bus: {why}", "15118", "t1s");
+
+                    await follower. DisposeAsync();
+                    await transport.DisposeAsync();
+
+                    return new T1SAttachment(
+                               null,
+                               null,
+                               new JObject(
+                                   new JProperty("outcome",     "notAttached"),
+                                   new JProperty("startedAt",   started.ToString("o")),
+                                   new JProperty("elapsed_ms",  Math.Round(watch.Elapsed.TotalMilliseconds, 1)),
+                                   new JProperty("transport",   mediumKind.Write()),
+                               new JProperty("medium",      mediumText),
+                                   new JProperty("error",       why)
+                               )
+                           );
+
+                }
+
+                watch.Stop();
+
+                Log.Notice($"T1S: on the bus as node {follower.NodeId} in {watch.Elapsed.TotalMilliseconds:F0} ms - " +
+                           $"coordinator {follower.Coordinator}, {follower.Weight} opportunit{(follower.Weight == 1 ? "y" : "ies")} per cycle.",
+                           "15118", "t1s");
+
+                return new T1SAttachment(
+                           transport,
+                           follower,
+                           new JObject(
+                               new JProperty("outcome",       "attached"),
+                               new JProperty("startedAt",     started.ToString("o")),
+                               new JProperty("elapsed_ms",    Math.Round(watch.Elapsed.TotalMilliseconds, 1)),
+                               new JProperty("transport",   mediumKind.Write()),
+                               new JProperty("medium",      mediumText),
+                               new JProperty("mac",           transport.LocalMac.ToString()),
+                               new JProperty("coordinator",   follower.Coordinator?.ToString()),
+                               new JProperty("nodeId",        follower.NodeId),
+                               new JProperty("weight",        follower.Weight)
+                           )
+                       );
+
+            }
+            catch (OperationCanceledException)
+            {
+
+                Log.Info($"T1S: joining the bus over {mediumText} was cancelled.", "15118", "t1s");
+
+                if (follower  is not null) await follower. DisposeAsync();
+                if (transport is not null) await transport.DisposeAsync();
+
+                return new T1SAttachment(
+                           null,
+                           null,
+                           new JObject(
+                               new JProperty("outcome",     "cancelled"),
+                               new JProperty("startedAt",   started.ToString("o")),
+                               new JProperty("elapsed_ms",  Math.Round(watch.Elapsed.TotalMilliseconds, 1)),
+                               new JProperty("transport",   mediumKind.Write()),
+                               new JProperty("medium",      mediumText)
+                           )
+                       );
+
+            }
+            catch (Exception e)
+            {
+
+                Log.Error($"T1S: joining the bus over {mediumText} failed: {e.Message}", "15118", "t1s");
+
+                if (follower  is not null) await follower. DisposeAsync();
+                if (transport is not null) await transport.DisposeAsync();
+
+                return new T1SAttachment(
+                           null,
+                           null,
+                           new JObject(
+                               new JProperty("outcome",     "failed"),
+                               new JProperty("startedAt",   started.ToString("o")),
+                               new JProperty("elapsed_ms",  Math.Round(watch.Elapsed.TotalMilliseconds, 1)),
+                               new JProperty("transport",   mediumKind.Write()),
+                               new JProperty("medium",      mediumText),
+                               new JProperty("error",       e.Message)
+                           )
+                       );
+
+            }
+
+        }
+
+        #endregion
+
         #region PairAsync(Peer, Log, CancellationToken = default)
 
         /// <summary>
@@ -554,6 +807,83 @@ namespace cloud.charging.open.EV.ISO15118
 
             => $"[{Response.SeccIPAddress}]:{Response.SeccPort} " +
                $"({(Response.Security == SDP_Security.TLS ? "TLS" : "no TLS")}, {Response.TransportProtocol})";
+
+        #endregion
+
+    }
+
+
+
+    /// <summary>
+    /// A vehicle's place on a coupler's 10BASE-T1S bus: how getting there went,
+    /// and - while it is there - the node it is. Disposing of it is leaving.
+    /// </summary>
+    /// <remarks>
+    /// A report and a handle in one, because the two cannot be separated: a
+    /// vehicle that attached is on the bus until it leaves, and a caller that
+    /// got only the report would have no way to leave. Where attaching failed
+    /// the handle is empty and disposing of it does nothing.
+    /// </remarks>
+    public sealed class T1SAttachment : IAsyncDisposable
+    {
+
+        #region Properties
+
+        /// <summary>The node this vehicle is on the bus, or null where it never got on.</summary>
+        public PlcaFollower?  Node        { get; }
+
+        /// <summary>How attaching went, as the web interface reads it.</summary>
+        public JObject        JSON        { get; }
+
+        /// <summary>Whether this vehicle is on the bus.</summary>
+        public Boolean        IsAttached
+            => Node is not null && Node.State == PlcaFollowerState.Attached;
+
+        /// <summary>
+        /// Whether there was no bus to join and nothing wrong with that: the
+        /// transport was left to Auto on a machine without an adapter.
+        /// </summary>
+        public Boolean        IsDeclined
+            => Node is null && JSON.Value<String>("outcome") == "declined";
+
+        #endregion
+
+        #region Data
+
+        private readonly IT1STransport?  transport;
+
+        #endregion
+
+        #region Constructor(s)
+
+        internal T1SAttachment(IT1STransport?  Transport,
+                               PlcaFollower?   Node,
+                               JObject         JSON)
+        {
+            this.transport  = Transport;
+            this.Node       = Node;
+            this.JSON       = JSON;
+        }
+
+        #endregion
+
+
+        #region DisposeAsync()
+
+        /// <summary>
+        /// Leave the bus - with a LEAVE, so the coordinator need not wait to
+        /// find out - and let go of the medium.
+        /// </summary>
+        public async ValueTask DisposeAsync()
+        {
+
+            if (Node is not null)
+                await Node.DisposeAsync();
+
+            if (transport is not null)
+                await transport.DisposeAsync();
+
+        }
 
         #endregion
 

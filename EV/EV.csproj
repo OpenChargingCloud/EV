@@ -15,6 +15,7 @@
     <ProjectReference Include="..\..\WWCP_ISO15118\WWCP_ISO15118_NetworkInterfaces\WWCP_ISO15118_NetworkInterfaces.csproj" />
     <ProjectReference Include="..\..\WWCP_ISO15118\WWCP_ISO15118_SDP\WWCP_ISO15118_SDP.csproj" />
     <ProjectReference Include="..\..\WWCP_ISO15118\WWCP_ISO15118_SLAC\WWCP_ISO15118_SLAC.csproj" />
+    <ProjectReference Include="..\..\WWCP_ISO15118\WWCP_ISO15118_T1S\WWCP_ISO15118_T1S.csproj" />
     <ProjectReference Include="..\..\WWCP_ISO15118\WWCP_ISO15118_V2GTP\WWCP_ISO15118_V2GTP.csproj" />
     <!-- The session itself: the EVCC state machines for -2 and -20, the SAP handshake, the transports
          and the PKCS#12 handling both roles share. It brings the codecs, SDP, SLAC and BouncyCastle

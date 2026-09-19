@@ -20,7 +20,7 @@ and belongs to whoever starts the thing; everything a vehicle *is* lives here.
 | `EV.Clock.cs` | what time it thinks it is, and what that is worth |
 | `EV.Diagnostics.cs` | asking a name server or a time server something, step by step |
 | `HTTPAPI/EVHTTPAPI.cs` | the JSON API at `/api`, and the Server-Sent Events stream everything travels on |
-| `ISO15118/V2GLink.cs` | the wire below the charging cable: which interfaces could carry it, SLAC, and the SDP client |
+| `ISO15118/V2GLink.cs` | the wire below the charging cable: which interfaces could carry it, SLAC, the 10BASE-T1S bus of an MCS coupler, and the SDP client |
 | `ISO15118/V2GSession.cs` | one session, from the TCP connection to `SessionStop` |
 | `ISO15118/VehicleCredentials.cs` | the three certificates a vehicle carries, turned into the shapes a session needs |
 | `Configuration/` | one record per section of the configuration file |

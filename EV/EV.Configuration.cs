@@ -28,6 +28,7 @@ using org.GraphDefined.Vanaheimr.Norn.NTS;
 
 
 using cloud.charging.open.protocols.ISO15118.SDP.Messages;
+using cloud.charging.open.protocols.ISO15118.T1S.Transport;
 
 using cloud.charging.open.EV.Certificates;
 using cloud.charging.open.EV.Configuration;
@@ -907,7 +908,11 @@ namespace cloud.charging.open.EV
                        new JProperty("mode",                     SessionSettings.ModeWritten     ?? "dc"),
                        new JProperty("tls",                      SessionSettings.TLSWritten      ?? "none"),
                        new JProperty("renegotiate",              SessionSettings.Renegotiate     ?? false),
-                       new JProperty("slacPeer",                 SessionSettings.SLACPeer)
+                       new JProperty("slacPeer",                 SessionSettings.SLACPeer),
+                       new JProperty("t1sBus",                   SessionSettings.T1SBus),
+                       new JProperty("t1sTransport",             SessionSettings.T1STransportInEffect.Write()),
+                       new JProperty("t1sInterface",             SessionSettings.T1SInterface),
+                       new JProperty("t1sWeight",                SessionSettings.T1SWeightInEffect)
                    )),
 
                    new JProperty("certificates",             new JObject(
@@ -1101,6 +1106,10 @@ namespace cloud.charging.open.EV
             var oemCert      = Settle("oemCertificate",      Configuration.OEMCertificate,      previous.OEMCertificate);
             var tariffCert   = Settle("tariffCertificate",   Configuration.TariffCertificate,   previous.TariffCertificate);
             var slacPeer     = Settle("slacPeer",            Configuration.SLACPeer,            previous.SLACPeer);
+            var t1sBus       = Settle("t1sBus",              Configuration.T1SBus,              previous.T1SBus);
+            var t1sTransport = Settle("t1sTransport",        Configuration.T1STransport,        previous.T1STransport);
+            var t1sInterface = Settle("t1sInterface",        Configuration.T1SInterface,        previous.T1SInterface);
+            var t1sWeight    = Settle("t1sWeight",           Configuration.T1SWeight,           previous.T1SWeight);
             var renegotiate  = Settle("renegotiate",         Configuration.Renegotiate,         previous.Renegotiate);
 
             var targetEnergy = Settle("targetEnergyKWh",             Configuration.TargetEnergy_kWh,             previous.TargetEnergy_kWh);
@@ -1125,7 +1134,11 @@ namespace cloud.charging.open.EV
                                   departure,
                                   minimumSoC,
                                   renegotiate,
-                                  slacPeer
+                                  slacPeer,
+                                  t1sBus,
+                                  t1sTransport,
+                                  t1sInterface,
+                                  t1sWeight
                               );
 
             #region What to say about it
@@ -1144,6 +1157,14 @@ namespace cloud.charging.open.EV
 
             if (previous.SLACPeer != slacPeer)
                 changed.Add($"SLAC peer = {slacPeer ?? "none"}");
+
+            if (previous.T1SBus != t1sBus)
+                changed.Add($"T1S bus = {t1sBus ?? "none"}");
+
+            if (previous.T1STransport != t1sTransport || previous.T1SInterface != t1sInterface || previous.T1SWeight != t1sWeight)
+                changed.Add($"T1S transport = {SessionSettings.T1STransportInEffect.Write()}" +
+                            (t1sInterface is null ? "" : $" on {t1sInterface}") +
+                            $", weight {SessionSettings.T1SWeightInEffect}");
 
             if (previous.Renegotiate != renegotiate)
                 changed.Add($"renegotiate = {renegotiate ?? false}");

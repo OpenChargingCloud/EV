@@ -356,6 +356,24 @@ export interface SlacResult {
     error?:       string;
 }
 
+/** One attachment to the coupler's 10BASE-T1S bus: which medium, and as which node. */
+export interface T1SResult {
+    outcome:      'attached' | 'notAttached' | 'declined' | 'noMedium' | 'cancelled' | 'failed' | 'notConfigured' | 'busy';
+    startedAt?:   string;
+    elapsed_ms?:  number;
+    /** Which kind of medium was decided on: none, auto, afpacket or udp. */
+    transport?:   string;
+    /** What the medium is, for a reader: "UDP multicast 239.151.18.1:2354" or "AF_PACKET on eth1". */
+    medium?:      string;
+    mac?:         string;
+    coordinator?: string;
+    nodeId?:      number;
+    weight?:      number;
+    /** Why there was no bus to join and nothing wrong with that. */
+    reason?:      string;
+    error?:       string;
+}
+
 /** What the pack did over one session. */
 export interface SessionBattery {
     capacityKWh:           number;
@@ -380,7 +398,7 @@ export interface SessionBattery {
  * the fields rather than in the outcome.
  */
 export interface SessionRun {
-    outcome:             'completed' | 'failed' | 'cancelled' | 'busy' | 'slacFailed' | 'noStation';
+    outcome:             'completed' | 'failed' | 'cancelled' | 'busy' | 'slacFailed' | 't1sFailed' | 'noStation';
     error?:              string;
     startedAt?:          string;
     elapsed_ms?:         number;
@@ -404,6 +422,7 @@ export interface SessionRun {
     tariff?:             { signaturePresent: boolean; digestOk: boolean; signatureOk: boolean; tuplesOffered?: number } | null;
     /** The stages that ran before the session, where they did. */
     slac?:               SlacResult;
+    t1s?:                T1SResult;
     discovery?:          DiscoveryResult;
     /** The first half, on a run that paused and rejoined. */
     pausedRun?:          SessionRun;
@@ -503,6 +522,11 @@ export interface SessionConfiguration {
         tls:          'none' | 'dotnet' | 'bc';
         renegotiate:  boolean;
         slacPeer:     string | null;
+        /** The 10BASE-T1S bus of an MCS coupler: which medium, where, and how often to be asked. */
+        t1sTransport: 'none' | 'auto' | 'afpacket' | 'udp';
+        t1sBus:       string | null;
+        t1sInterface: string | null;
+        t1sWeight:    number;
     };
     certificates: {
         pkiDirectory:         string | null;
@@ -539,6 +563,10 @@ export interface SessionUpdate {
     tls?:                          'none' | 'dotnet' | 'bc' | null;
     renegotiate?:                  boolean | null;
     slacPeer?:                     string | null;
+    t1sTransport?:                 'none' | 'auto' | 'afpacket' | 'udp' | null;
+    t1sBus?:                       string | null;
+    t1sInterface?:                 string | null;
+    t1sWeight?:                    number | null;
     pkiDirectory?:                 string | null;
     vehicleCertificate?:           string | null;
     contractCertificate?:          string | null;

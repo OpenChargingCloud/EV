@@ -200,6 +200,9 @@ export const sessionPage: Page = {
                                       ${settings.slacPeer === null
                                             ? ''
                                             : html` A SLAC pairing with <code>${settings.slacPeer}</code> runs before it.`}
+                                      ${settings.t1sTransport === 'none'
+                                            ? ''
+                                            : html` The coupler's 10BASE-T1S bus is joined over <code>${settings.t1sTransport}</code> before it.`}
                                       One iteration of the charge loop is one simulated minute, so a full charge
                                       is several hundred exchanges - name a charging time below when the station
                                       at the other end is a real one.
@@ -249,6 +252,32 @@ export const sessionPage: Page = {
                             <label>SLAC peer
                                 <input type="text" name="slacPeer" value="${settings.slacPeer ?? ''}"
                                        placeholder="leave empty for no pairing stage"
+                                       ${mayChangeLink ? '' : html`disabled`} />
+                            </label>
+
+                            <label>10BASE-T1S bus - the medium below an MCS coupler
+                                <select name="t1sTransport" ${mayChangeLink ? '' : html`disabled`}>
+                                    <option value="none"     ${settings.t1sTransport === 'none'     ? html`selected` : ''}>none - a CCS vehicle</option>
+                                    <option value="auto"     ${settings.t1sTransport === 'auto'     ? html`selected` : ''}>auto - a real adapter where there is one</option>
+                                    <option value="afpacket" ${settings.t1sTransport === 'afpacket' ? html`selected` : ''}>afpacket - a real adapter, by name (Linux)</option>
+                                    <option value="udp"      ${settings.t1sTransport === 'udp'      ? html`selected` : ''}>udp - the emulated medium, for a bench</option>
+                                </select>
+                            </label>
+
+                            <label>T1S bus group
+                                <input type="text" name="t1sBus" value="${settings.t1sBus ?? ''}"
+                                       placeholder="239.151.18.1:16118 - the emulated medium's group and port"
+                                       ${mayChangeLink ? '' : html`disabled`} />
+                            </label>
+
+                            <label>T1S interface
+                                <input type="text" name="t1sInterface" value="${settings.t1sInterface ?? ''}"
+                                       placeholder="leave empty: the V2G interface for an adapter, the system's pick for udp"
+                                       ${mayChangeLink ? '' : html`disabled`} />
+                            </label>
+
+                            <label>T1S weight - transmit opportunities per cycle, 1 to 8
+                                <input type="number" name="t1sWeight" value="${settings.t1sWeight}" min="1" max="8" step="1"
                                        ${mayChangeLink ? '' : html`disabled`} />
                             </label>
 
@@ -458,6 +487,20 @@ export const sessionPage: Page = {
                             `
                           : ''}
 
+                    ${run.t1s
+                          ? html`
+                              <h3>10BASE-T1S</h3>
+                              <div class="kv-list">
+                                  <div class="kv"><span class="k">Bus</span><span class="v">${run.t1s.outcome}</span></div>
+                                  ${run.t1s.medium            ? html`<div class="kv"><span class="k">Medium</span><span class="v"><code>${run.t1s.medium}</code></span></div>` : ''}
+                                  ${run.t1s.nodeId !== undefined
+                                                              ? html`<div class="kv"><span class="k">Node</span><span class="v">${run.t1s.nodeId}, ${run.t1s.weight} opportunit${run.t1s.weight === 1 ? 'y' : 'ies'} per cycle</span></div>` : ''}
+                                  ${run.t1s.reason            ? html`<div class="kv"><span class="k">Reason</span><span class="v">${run.t1s.reason}</span></div>` : ''}
+                                  ${run.t1s.error             ? html`<div class="kv"><span class="k">Error</span><span class="v">${run.t1s.error}</span></div>` : ''}
+                              </div>
+                            `
+                          : ''}
+
                     ${run.pausedRun
                           ? html`
                               <h3>The half before the pause</h3>
@@ -505,6 +548,7 @@ export const sessionPage: Page = {
                 case 'cancelled':   return 'the session was stopped';
                 case 'busy':        return 'a session was already running';
                 case 'slacFailed':  return 'the SLAC pairing did not complete, so no session was started';
+                case 't1sFailed':   return 'the vehicle could not join the coupler\'s bus, so no session was started';
                 case 'noStation':   return 'there was no station to drive to';
                 default:            return 'the session failed';
             }
@@ -522,8 +566,11 @@ export const sessionPage: Page = {
                 event.preventDefault();
 
                 const data    = new FormData(event.target as HTMLFormElement);
-                const connect = String(data.get('connect')  ?? '').trim();
-                const peer    = String(data.get('slacPeer') ?? '').trim();
+                const connect = String(data.get('connect')      ?? '').trim();
+                const peer    = String(data.get('slacPeer')     ?? '').trim();
+                const bus     = String(data.get('t1sBus')       ?? '').trim();
+                const nic     = String(data.get('t1sInterface') ?? '').trim();
+                const weight  = Number(data.get('t1sWeight'));
 
                 // An emptied field is a setting taken back, which the vehicle
                 // spells as an explicit null. Leaving it out of the request
@@ -531,6 +578,10 @@ export const sessionPage: Page = {
                 void save('link', {
                     connect:      connect.length > 0 ? connect : null,
                     slacPeer:     peer.length    > 0 ? peer    : null,
+                    t1sTransport: String(data.get('t1sTransport') ?? 'none') as 'none' | 'auto' | 'afpacket' | 'udp',
+                    t1sBus:       bus.length     > 0 ? bus     : null,
+                    t1sInterface: nic.length     > 0 ? nic     : null,
+                    t1sWeight:    Number.isInteger(weight) && weight >= 1 && weight <= 8 ? weight : null,
                     protocol:     String(data.get('protocol') ?? 'both') as 'both' | '2' | '20',
                     mode:         String(data.get('mode')     ?? 'dc')   as 'ac' | 'dc' | 'mcs',
                     tls:          String(data.get('tls')      ?? 'none') as 'none' | 'dotnet' | 'bc',

@@ -17,6 +17,8 @@
 
 #region Usings
 
+using System.Net;
+using System.Net.Sockets;
 using System.Diagnostics.CodeAnalysis;
 
 using Newtonsoft.Json.Linq;
@@ -24,6 +26,8 @@ using Newtonsoft.Json.Linq;
 using cloud.charging.open.protocols.ISO15118.SharedCC;
 using cloud.charging.open.protocols.ISO15118.StateMachines;
 using cloud.charging.open.protocols.ISO15118.Transport;
+using cloud.charging.open.protocols.ISO15118.T1S;
+using cloud.charging.open.protocols.ISO15118.T1S.Transport;
 
 #endregion
 
@@ -75,6 +79,10 @@ namespace cloud.charging.open.EV.Configuration
     /// <param name="MinimumStateOfCharge_percent">What the driver needs by then. A floor, not a goal.</param>
     /// <param name="Renegotiate">ISO 15118-2: send PowerDelivery(Renegotiate) after the first cycle.</param>
     /// <param name="SLACPeer">The station's SLAC endpoint over a simulated medium, as <c>host:port</c>; without one no pairing stage runs.</param>
+    /// <param name="T1SBus">The 10BASE-T1S bus of an MCS coupler on the emulated medium, as the multicast <c>group:port</c>; the library's default group when the transport is "udp" and this says nothing.</param>
+    /// <param name="T1STransport">Which medium the bus is on: "none", "auto", "afpacket" or "udp". With only a bus named it is "udp", because a group is a thing only the emulated medium has; with nothing named there is no bus.</param>
+    /// <param name="T1SInterface">The interface the bus is on: the adapter, for AF_PACKET, which is the V2G interface when this says nothing; the interface to join the group on, for UDP, which the operating system picks when this says nothing.</param>
+    /// <param name="T1SWeight">How many transmit opportunities per cycle this vehicle asks the coordinator for, 1 to 8. Three when the file does not say, which is more than any sensor and is the point.</param>
     /// <param name="Cleared">
     /// The fields the document set to an explicit null, which is how a setting is taken back rather than
     /// left alone. Not something the file says about the vehicle - it is something a request says about
@@ -97,6 +105,10 @@ namespace cloud.charging.open.EV.Configuration
                                               Double?           MinimumStateOfCharge_percent  = null,
                                               Boolean?          Renegotiate                   = null,
                                               String?           SLACPeer                      = null,
+                                              String?           T1SBus                        = null,
+                                              T1STransportKind? T1STransport                  = null,
+                                              String?           T1SInterface                  = null,
+                                              Byte?             T1SWeight                     = null,
                                               IReadOnlySet<String>?
                                                                 Cleared                       = null)
     {
@@ -145,6 +157,7 @@ namespace cloud.charging.open.EV.Configuration
         public static readonly IReadOnlySet<String>  Clearable = new HashSet<String> {
             "connect", "protocol", "mode", "tls", "pkiDirectory", "vehicleCertificate",
             "contractCertificate", "oemCertificate", "tariffCertificate", "slacPeer",
+            "t1sBus", "t1sTransport", "t1sInterface", "t1sWeight",
             "targetEnergyKWh", "maxChargingTimeSeconds", "departureInSeconds",
             "minimumStateOfChargePercent", "renegotiate"
         };
@@ -154,6 +167,19 @@ namespace cloud.charging.open.EV.Configuration
         /// bracketed IPv6 literal with a zone is already 50 characters.
         /// </summary>
         public const Int32   MaxEndpointLength       = 256;
+
+        /// <summary>
+        /// The longest an interface name may be written. Linux allows 15
+        /// characters; Windows names are prose.
+        /// </summary>
+        public const Int32   MaxInterfaceNameLength  = 128;
+
+        /// <summary>
+        /// The transmit opportunities per cycle a vehicle asks for when the
+        /// file does not say: three, against a sensor's one, so that the node
+        /// carrying the whole of ISO 15118-20 is asked most often.
+        /// </summary>
+        public const Byte    DefaultT1SWeight        = 3;
 
         /// <summary>
         /// The most energy one run may be asked to deliver, in kWh. Above a
@@ -238,6 +264,10 @@ namespace cloud.charging.open.EV.Configuration
                 !ConfigurationReader.TryReadString (JSON, "oemCertificate",      SectionName, MaxHandleLength,   out var oemCert,      out Error) ||
                 !ConfigurationReader.TryReadString (JSON, "tariffCertificate",   SectionName, MaxHandleLength,   out var tariffCert,   out Error) ||
                 !ConfigurationReader.TryReadString (JSON, "slacPeer",            SectionName, MaxEndpointLength, out var slacPeer,     out Error) ||
+                !ConfigurationReader.TryReadString (JSON, "t1sBus",              SectionName, MaxEndpointLength, out var t1sBus,       out Error) ||
+                !ConfigurationReader.TryReadString (JSON, "t1sTransport",        SectionName, 16,                out var t1sTransportText, out Error) ||
+                !ConfigurationReader.TryReadString (JSON, "t1sInterface",        SectionName, MaxInterfaceNameLength, out var t1sInterface, out Error) ||
+                !ConfigurationReader.TryReadByte   (JSON, "t1sWeight",           SectionName,                    out var t1sWeight,    out Error) ||
                 !ConfigurationReader.TryReadNumber (JSON, "targetEnergyKWh",             SectionName, 0.001, MaxTargetEnergy_kWh,    out var targetEnergy, out Error) ||
                 !ConfigurationReader.TryReadNumber (JSON, "minimumStateOfChargePercent", SectionName, 0,     100,                    out var minimumSoC,   out Error) ||
                 !ConfigurationReader.TryReadSeconds(JSON, "maxChargingTimeSeconds",      SectionName, 1,     MaxChargingTimeSeconds, out var maxTime,      out Error) ||
@@ -347,6 +377,40 @@ namespace cloud.charging.open.EV.Configuration
 
             #endregion
 
+            #region The bus
+
+            T1STransportKind? t1sTransport = null;
+
+            if (t1sTransportText is not null)
+            {
+
+                if (!T1STransportKinds.TryParse(t1sTransportText, out var kind))
+                {
+                    Error = $"'{SectionName}.t1sTransport' must be \"none\", \"auto\", \"afpacket\" or \"udp\".";
+                    return false;
+                }
+
+                t1sTransport = kind;
+
+            }
+
+            // The emulated medium is IPv4 multicast and nothing else, so a
+            // bus that is not a group is refused here, where the message can
+            // name the field, rather than at the socket a session later.
+            if (t1sBus is not null && !TryParseT1SBus(t1sBus, out _))
+            {
+                Error = $"'{SectionName}.t1sBus' must be an IPv4 multicast group and port, like {T1SConstants.DefaultMulticastEndpoint}.";
+                return false;
+            }
+
+            if (t1sWeight is { } weight && (weight < 1 || weight > T1SConstants.MaxWeight))
+            {
+                Error = $"'{SectionName}.t1sWeight' must be between 1 and {T1SConstants.MaxWeight} transmit opportunities per cycle.";
+                return false;
+            }
+
+            #endregion
+
             #region MCS is an ISO 15118-20 session and nothing else
 
             // Energy-transfer services 8/9 exist in no other catalogue, so
@@ -380,6 +444,10 @@ namespace cloud.charging.open.EV.Configuration
                                 minimumSoC,
                                 renegotiate,
                                 slacPeer,
+                                t1sBus,
+                                t1sTransport,
+                                t1sInterface?.Trim(),
+                                t1sWeight,
                                 cleared
                             );
 
@@ -410,6 +478,10 @@ namespace cloud.charging.open.EV.Configuration
             if (OEMCertificate      is not null)  json.Add("oemCertificate",      OEMCertificate);
             if (TariffCertificate   is not null)  json.Add("tariffCertificate",   TariffCertificate);
             if (SLACPeer            is not null)  json.Add("slacPeer",            SLACPeer);
+            if (T1SBus              is not null)  json.Add("t1sBus",              T1SBus);
+            if (T1STransportWritten is not null)  json.Add("t1sTransport",        T1STransportWritten);
+            if (T1SInterface        is not null)  json.Add("t1sInterface",        T1SInterface);
+            if (T1SWeight.HasValue)               json.Add("t1sWeight",           T1SWeight.Value);
 
             if (TargetEnergy_kWh.HasValue)             json.Add("targetEnergyKWh",              TargetEnergy_kWh.Value);
             if (MaxChargingTime.HasValue)              json.Add("maxChargingTimeSeconds",       MaxChargingTime. Value.TotalSeconds);
@@ -460,6 +532,66 @@ namespace cloud.charging.open.EV.Configuration
                          PowerMode.Dc  => "dc",
                          _             => null
                      };
+
+        /// <summary>
+        /// How the transport of the bus is written, or null where the file
+        /// did not say.
+        /// </summary>
+        public String? T1STransportWritten
+            => T1STransport?.Write();
+
+        /// <summary>
+        /// The transport a session actually attaches with: what was named;
+        /// or, with only a bus named, the emulated medium that a group is a
+        /// thing of; or none.
+        /// </summary>
+        public T1STransportKind T1STransportInEffect
+            => T1STransport ?? (T1SBus is not null ? T1STransportKind.UDP : T1STransportKind.None);
+
+        /// <summary>
+        /// The transmit opportunities per cycle a session asks for.
+        /// </summary>
+        public Byte T1SWeightInEffect
+            => T1SWeight ?? DefaultT1SWeight;
+
+        /// <summary>
+        /// The bus as a group and port, or null where none is named; what
+        /// was named has been checked, so this never fails on a saved file.
+        /// </summary>
+        public IPEndPoint? T1SBusEndpoint
+            => T1SBus is not null && TryParseT1SBus(T1SBus, out var bus)
+                   ? bus
+                   : null;
+
+        #region (static) TryParseT1SBus(Text, out Bus)
+
+        /// <summary>
+        /// An IPv4 multicast group and a port, as <c>239.151.18.1:16118</c>.
+        /// </summary>
+        public static Boolean TryParseT1SBus(String                          Text,
+                                             [NotNullWhen(true)] out IPEndPoint?  Bus)
+        {
+
+            Bus = null;
+
+            if (!IPEndPoint.TryParse(Text.Trim(), out var endpoint) ||
+                endpoint.Port == 0 ||
+                endpoint.Address.AddressFamily != AddressFamily.InterNetwork)
+            {
+                return false;
+            }
+
+            var first = endpoint.Address.GetAddressBytes()[0];
+
+            if (first < 224 || first > 239)
+                return false;
+
+            Bus = endpoint;
+            return true;
+
+        }
+
+        #endregion
 
         /// <summary>
         /// How the TLS stack is written.

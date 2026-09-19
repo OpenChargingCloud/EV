@@ -1041,7 +1041,8 @@ namespace cloud.charging.open.EV
                 if (JSON.ContainsKey(field))
                     required |= Permissions.ManageCredentials;
 
-            foreach (var field in new[] { "connect", "protocol", "mode", "tls", "slacPeer", "renegotiate" })
+            foreach (var field in new[] { "connect", "protocol", "mode", "tls", "slacPeer",
+                                          "t1sBus", "t1sTransport", "t1sInterface", "t1sWeight", "renegotiate" })
                 if (JSON.ContainsKey(field))
                     required |= Permissions.ChangeNetworkSettings;
 
