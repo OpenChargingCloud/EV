@@ -233,6 +233,59 @@ namespace cloud.charging.open.EV
         public HTTPExtAPI             ExtAPI                       { get; }
 
         /// <summary>
+        /// Whether those accounts are this vehicle's own, or somebody else's
+        /// that it was handed.
+        /// </summary>
+        /// <remarks>
+        /// It decides two things. What is shut down when this vehicle is: an
+        /// HTTPExt API handed in outlives it, and disposing of somebody else's
+        /// would take the sign-in away from whoever else is using it. And what
+        /// this vehicle may say about the accounts on its Configuration page -
+        /// shared accounts are not its to describe as "the accounts of this
+        /// vehicle".
+        /// </remarks>
+        public Boolean                OwnsExtAPI                   { get; }
+
+        /// <summary>
+        /// Whether the HTTP server is this vehicle's own, or one it was handed
+        /// and shares with somebody else.
+        /// </summary>
+        /// <remarks>
+        /// A shared server is started and stopped by whoever made it. A vehicle
+        /// that started one it did not make would take the same socket twice
+        /// where several of these programs are on it, and a vehicle that
+        /// stopped one would close the web interface of every other program
+        /// registered within it.
+        /// </remarks>
+        public Boolean                OwnsHTTPServer               { get; }
+
+        /// <summary>
+        /// Everything of this vehicle - its web interface, its JSON API and,
+        /// where the accounts are its own, those too - sits below this.
+        /// </summary>
+        /// <remarks>
+        /// The root, which is what a vehicle on a port of its own wants and
+        /// what it always used to be. It is something else only where several
+        /// of these programs share one HTTP server and are told apart by the
+        /// first path segment rather than by the port.
+        /// </remarks>
+        public HTTPPath               BasePath                     { get; }
+
+        /// <summary>
+        /// The base path as it is written into a URL: the empty string at the
+        /// root, and "/EV" or the like below one.
+        /// </summary>
+        /// <remarks>
+        /// Its own property because the two forms are not interchangeable and
+        /// the difference is exactly one character: <c>HTTPPath.Root</c> writes
+        /// itself as "/", and "/" + "/index.html" is a URL nothing serves.
+        /// </remarks>
+        public String                 BasePathText
+            => BasePath == HTTPPath.Root
+                   ? ""
+                   : BasePath.ToString().TrimEnd('/');
+
+        /// <summary>
         /// The directory the accounts live in between starts.
         /// </summary>
         public String                 AccountsPath                 { get; }
@@ -365,7 +418,9 @@ namespace cloud.charging.open.EV
         /// <param name="HTTPHostname">The address the web interface listens on; 127.0.0.1 by default.</param>
         /// <param name="HTTPPort">The TCP port it listens on; DefaultHTTPPort by default.</param>
         /// <param name="HTTPServer">An HTTP server to register within, or null to make one.</param>
-        /// <param name="HTTPRootPath">Where the JSON API sits; "/api" by default.</param>
+        /// <param name="BasePath">What everything of this vehicle sits below; the root by default. Something else only where several of these programs share one HTTP server.</param>
+        /// <param name="HTTPRootPath">Where the JSON API sits; "/api" below <paramref name="BasePath"/> by default.</param>
+        /// <param name="ExtAPI">An HTTPExt API to sign in against, or null for one of this vehicle's own. Handing one in is what makes one sign-in open several of these programs at once.</param>
         /// <param name="AccountsPath">The directory the accounts live in between starts.</param>
         /// <param name="ConfigFile">Where the configuration lives between starts.</param>
         /// <param name="DNSClient">How to resolve names, or null to make a client.</param>
@@ -380,7 +435,9 @@ namespace cloud.charging.open.EV
         public EV(IIPAddress?            HTTPHostname      = null,
                   IPPort?                HTTPPort          = null,
                   HTTPServer?            HTTPServer        = null,
+                  HTTPPath?              BasePath          = null,
                   HTTPPath?              HTTPRootPath      = null,
+                  HTTPExtAPI?            ExtAPI            = null,
                   String?                AccountsPath      = null,
                   EVConfigFile?          ConfigFile        = null,
                   DNSClient?             DNSClient         = null,
@@ -525,6 +582,8 @@ namespace cloud.charging.open.EV
             var address        = HTTPHostname ?? IPv4Address.Localhost;
             var port           = HTTPPort     ?? DefaultHTTPPort;
 
+            this.OwnsHTTPServer = HTTPServer is null;
+
             this.httpServer    = HTTPServer   ?? new HTTPServer(
                                                      IPAddress:       address,
                                                      TCPPort:         port,
@@ -532,18 +591,32 @@ namespace cloud.charging.open.EV
                                                      DNSClient:       dnsClient
                                                  );
 
-            this.httpRootPath  = HTTPRootPath ?? EVHTTPAPI.DefaultAPIPath;
+            // The root unless somebody is putting several of these programs on
+            // one server, where the first path segment is what tells them
+            // apart. Everything below is relative to it, which is the whole
+            // reason it is settled here and read rather than repeated.
+            this.BasePath      = BasePath     ?? HTTPPath.Root;
+
+            this.httpRootPath  = HTTPRootPath ?? this.BasePath + EVHTTPAPI.DefaultAPIPath;
 
             this.HTTPPort        = port;
-            this.WebInterfaceURL = URL.Parse($"http://{address}:{port}/");
+            this.WebInterfaceURL = URL.Parse($"http://{address}:{port}{this.BasePath.ToString().TrimEnd('/')}/");
 
             // 1) The HTTPExt API at "/ext". First of the three, because it is
             //    the one with a database behind it: whatever it finds wrong
             //    with its files, it should say so before a port is opened and
             //    before anybody is let in against accounts that were not read.
-            this.ExtAPI        = new HTTPExtAPI(
+            //
+            //    Or the one that was handed in, which is how several of these
+            //    programs come to have one sign-in between them: the groups
+            //    each of them makes as it starts land in one set of accounts,
+            //    and the names overlap on purpose - an account in
+            //    "systemadmin" is an administrator of every one of them.
+            this.OwnsExtAPI    = ExtAPI is null;
+
+            this.ExtAPI        = ExtAPI ?? new HTTPExtAPI(
                                      HTTPServer:             httpServer,
-                                     RootPath:               ExtAPIPath,
+                                     RootPath:               this.BasePath + ExtAPIPath,
                                      HTTPServerName:         $"OpenChargingCloud EV v{Version}",
                                      HTTPServiceName:        $"OpenChargingCloud EV v{Version}",
                                      APIRobotEMailAddress:   EMailAddress.Parse("OpenChargingCloud EV Robot <robot@charging.cloud>"),
@@ -598,7 +671,12 @@ namespace cloud.charging.open.EV
                                      DisableLogging:         false
                                  );
 
-            this.Log.Info($"The accounts of this vehicle are in '{ExtAPI.DatabaseFileName}', its HTTPExt API at '{ExtAPIPath}'.", "web", "http");
+            this.Log.Info(
+                OwnsExtAPI
+                    ? $"The accounts of this vehicle are in '{this.ExtAPI.DatabaseFileName}', its HTTPExt API at '{this.ExtAPI.RootPath}'."
+                    : $"This vehicle signs in against accounts it shares, at '{this.ExtAPI.RootPath}'.",
+                "web", "http"
+            );
 
             // 2) The JSON API at "/api". Before the web interface, so that it
             //    is the more specific API and an unknown /api path never
@@ -606,7 +684,7 @@ namespace cloud.charging.open.EV
             this.API           = new EVHTTPAPI(
                                      HTTPServer:  httpServer,
                                      Vehicle:     this,
-                                     ExtAPI:      ExtAPI,
+                                     ExtAPI:      this.ExtAPI,
                                      Log:         this.Log,
                                      APIPath:     httpRootPath,
                                      Version:     Version
@@ -620,12 +698,25 @@ namespace cloud.charging.open.EV
             if (this.Frontend.TryGet(IndexFile, out _))
             {
 
-                this.WebInterface = httpServer.AddHTTPAPI();
+                this.WebInterface = httpServer.AddHTTPAPI(this.BasePath);
 
                 this.WebInterface.MapSinglePageApplication(
                     this.Frontend,
                     new SinglePageAppOptions {
-                        IndexTransform = html => html.Replace("{{ServerVersion}}", $"v{Version}", StringComparison.Ordinal)
+
+                        // Three placeholders and not one. The bundle reads
+                        // where it is and where its API is out of <meta> tags
+                        // rather than assuming "/" and "/api/v1", because
+                        // under a base path both of those are wrong - and a
+                        // single-page application that guesses its own base
+                        // path is one that works until somebody mounts it
+                        // somewhere.
+                        IndexTransform = html => html.
+                                                     Replace("{{ServerVersion}}", $"v{Version}",         StringComparison.Ordinal).
+                                                     Replace("{{BasePath}}",      BasePathText,          StringComparison.Ordinal).
+                                                     Replace("{{APIBase}}",       $"{httpRootPath.ToString().TrimEnd('/')}/v1", StringComparison.Ordinal).
+                                                     Replace("{{ExtBase}}",       this.ExtAPI.RootPath.ToString().TrimEnd('/'), StringComparison.Ordinal)
+
                     }
                 );
 
@@ -640,7 +731,7 @@ namespace cloud.charging.open.EV
                         request => Task.FromResult(
                                        new HTTPResponse.Builder(request) {
                                            HTTPStatusCode  = HTTPStatusCode.TemporaryRedirect,
-                                           Location        = Location.From(HTTPPath.Parse("/" + FaviconSVG)),
+                                           Location        = Location.From(HTTPPath.Parse($"{BasePathText}/{FaviconSVG}")),
                                            CacheControl    = "public, max-age=3600"
                                        }.AsImmutable
                                    ),
@@ -720,13 +811,16 @@ namespace cloud.charging.open.EV
             // nobody behind it.
             await EnsureAccounts();
 
-            try
+            if (OwnsHTTPServer)
             {
-                await httpServer.Start();
-            }
-            catch (SocketException problem)
-            {
-                throw new PortUnavailableException(HTTPPort, problem);
+                try
+                {
+                    await httpServer.Start();
+                }
+                catch (SocketException problem)
+                {
+                    throw new PortUnavailableException(HTTPPort, problem);
+                }
             }
 
             StartCheckingTheClock();
@@ -776,7 +870,11 @@ namespace cloud.charging.open.EV
             // does not wake those, so they are ended here first.
             API.CloseEventStreams();
 
-            await httpServer.Stop();
+            // The streams above are ended whoever owns the server, because they
+            // are this vehicle's; the socket is closed only where it is this
+            // vehicle's too.
+            if (OwnsHTTPServer)
+                await httpServer.Stop();
 
             started = false;
 
@@ -1088,7 +1186,9 @@ namespace cloud.charging.open.EV
                    new JProperty("http",       new JObject(
                        new JProperty("serverName",     httpServer.HTTPServerName),
                        new JProperty("url",            WebInterfaceURL.ToString()),
+                       new JProperty("basePath",       BasePath.ToString()),
                        new JProperty("apiPath",        httpRootPath.ToString()),
+                       new JProperty("sharedServer",   !OwnsHTTPServer),
                        new JProperty("running",        started),
                        new JProperty("frontend",       Frontend.Description),
                        new JProperty("webInterface",   WebInterface is not null)
@@ -1096,7 +1196,8 @@ namespace cloud.charging.open.EV
 
                    new JProperty("web",        new JObject(
                        new JProperty("accountsPath",   AccountsPath),
-                       new JProperty("signInAt",       $"{ExtAPIPath.ToString().TrimEnd('/')}/login"),
+                       new JProperty("sharedAccounts", !OwnsExtAPI),
+                       new JProperty("signInAt",       $"{ExtAPI.RootPath.ToString().TrimEnd('/')}/login"),
                        new JProperty("users",          ExtAPI.Users.     Count()),
                        new JProperty("groups",         ExtAPI.UserGroups.Count()),
                        new JProperty("cookie",         ExtAPI.SessionCookieName.ToString()),

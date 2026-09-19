@@ -20,6 +20,7 @@ import { sessionPage }       from './pages/session';
 import { loginPage }         from './pages/login';
 import { logsPage }          from './pages/logs';
 import { notFoundPage }      from './pages/notFound';
+import { fromURL } from './basePath';
 
 
 const root = document.getElementById('app');
@@ -67,7 +68,7 @@ auth.onChange(user => {
 
     logs.stop();
 
-    if (location.pathname !== '/login')
+    if (fromURL(location.pathname) !== '/login')
         router.navigate(auth.requireSignIn(new URL(location.href)) ?? '/login', true);
 
 });
