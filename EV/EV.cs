@@ -556,10 +556,26 @@ namespace cloud.charging.open.EV
             // What was handed in wins over what the file says, which is the
             // precedence a command line expects. Read before the session
             // settings are applied, because those name certificates in it.
+            //
+            // A relative path is measured from the configuration file rather
+            // than from wherever the process happens to have been started, and
+            // that is not tidiness. The default is the bare name "certificates",
+            // so measuring it from the current directory would put this
+            // vehicle's private keys wherever somebody typed "dotnet run" from -
+            // which, for a published binary, is beside the executable in bin/,
+            // where the next "dotnet clean" takes them with it. Accounts avoid
+            // that by being resolved against the repository root before they are
+            // handed over; certificates cannot be told to, because a store that
+            // moved when the working directory changed would be a different
+            // store. So the file that names it is what it is measured from, and
+            // a caller that means somewhere else says so absolutely.
             this.Certificates = new CertificateStore(
-                                    CertificatesPath
-                                        ?? configuration?.Certificates?.Directory
-                                        ?? CertificatesConfiguration.DefaultDirectory,
+                                    Beside(
+                                        this.ConfigFile.Path,
+                                        CertificatesPath
+                                            ?? configuration?.Certificates?.Directory
+                                            ?? CertificatesConfiguration.DefaultDirectory
+                                    ),
                                     this.Log
                                 );
 
@@ -1293,6 +1309,29 @@ namespace cloud.charging.open.EV
             GC.SuppressFinalize(this);
 
         }
+
+        #endregion
+
+        #region (private static) Beside(File, Path)
+
+        /// <summary>
+        /// A path as given where it is absolute, and otherwise measured from the
+        /// directory the given file is in.
+        /// </summary>
+        /// <remarks>
+        /// So that "certificates" means "beside the configuration file" rather
+        /// than "beside whatever the working directory happened to be". An
+        /// absolute path is left alone, because somebody who wrote one meant it.
+        /// </remarks>
+        private static String Beside(String  File,
+                                     String  Path)
+
+            => System.IO.Path.IsPathRooted(Path)
+                   ? Path
+                   : System.IO.Path.Combine(
+                         System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(File)) ?? ".",
+                         Path
+                     );
 
         #endregion
 

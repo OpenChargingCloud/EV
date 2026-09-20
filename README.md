@@ -16,13 +16,14 @@ and belongs to whoever starts the thing; everything a vehicle *is* lives here.
 |---|---|
 | `EV.cs` | the vehicle: its clock, its log, its HTTP server, and one SDP discovery at a time |
 | `EV.Session.cs` | charging: one session at a time, and the handle a pause leaves behind |
-| `EV.Configuration.cs` | what the Configuration pages read and write - DNS, NTS, the battery, the link, the session |
+| `EV.Configuration.cs` | what the Configuration pages read and write - DNS, NTS, the battery, the link, the certificates, the session |
 | `EV.Clock.cs` | what time it thinks it is, and what that is worth |
 | `EV.Diagnostics.cs` | asking a name server or a time server something, step by step |
 | `HTTPAPI/EVHTTPAPI.cs` | the JSON API at `/api`, and the Server-Sent Events stream everything travels on |
 | `ISO15118/V2GLink.cs` | the wire below the charging cable: which interfaces could carry it, SLAC, the 10BASE-T1S bus of an MCS coupler, and the SDP client |
 | `ISO15118/V2GSession.cs` | one session, from the TCP connection to `SessionStop` |
-| `ISO15118/VehicleCredentials.cs` | the three certificates a vehicle carries, turned into the shapes a session needs |
+| `ISO15118/VehicleCredentials.cs` | the credentials a session was given, turned into the shapes it needs - and checked against the roots this vehicle believes |
+| `Certificates/` | the store: what a certificate is for, what may go in, and what survives a restart |
 | `Configuration/` | one record per section of the configuration file |
 | `Web/` | who may sign in, what each role may do, and the session cookie |
 | `Logging/` | one log for everything, in memory and on the stream |
@@ -58,6 +59,20 @@ discoveries would put two questions on one link and sort the answers between
 them by arrival order, which is not sorting them at all. For a session the
 reason is simpler — a vehicle has one cable, and two sessions would be two
 vehicles, the second one charging through the first one's battery.
+
+Each stage can also be asked on its own, and that is what `--slac`, `--t1s`
+and `--sdp` do. `AttachToBusAsync` is the one for the 10BASE-T1S bus below a
+megawatt coupler: a session joins that bus by itself where one is configured,
+so this exists for the same reason the pairing stage has its own entry point —
+joining and then finding no station over SDP is a different link from never
+being given a node identifier at all, and only asking the two questions
+separately tells them apart. It stays on the bus for two seconds before
+leaving, so the station's log shows a node that was asked and answered rather
+than one that came and went inside a single cycle.
+
+It answers rather than throws where it cannot run: `notConfigured` when no
+T1S transport has been named, `busy` while a session holds the bus. Both are
+states somebody can be in on purpose, and neither is a fault.
 
 
 ## The session is somebody else's code

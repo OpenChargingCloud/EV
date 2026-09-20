@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2014-2026 GraphDefined GmbH <achim.friedland@graphdefined.com>
  * This file is part of EV <https://github.com/OpenChargingCloud/EV>
  *
@@ -46,7 +46,7 @@ namespace cloud.charging.open.EV.Configuration
     /// changes far more often than the store does.
     /// </para>
     /// </remarks>
-    /// <param name="Directory">Where the certificates are kept.</param>
+    /// <param name="Directory">Where the certificates are kept; a relative path is measured from this file.</param>
     public sealed record CertificatesConfiguration(String? Directory = null)
     {
 
@@ -58,9 +58,16 @@ namespace cloud.charging.open.EV.Configuration
         public const String  SectionName      = "certificates";
 
         /// <summary>
-        /// Where the store is when nobody says otherwise: beside the accounts,
-        /// below the repository root.
+        /// Where the store is when nobody says otherwise, as a name rather than
+        /// a path: <c>certificates/</c> beside the configuration file.
         /// </summary>
+        /// <remarks>
+        /// Relative on purpose, and measured from the file that names it rather
+        /// than from the working directory - see <see cref="EV"/>'s constructor.
+        /// A bare name measured from wherever the process was started would put
+        /// this vehicle's private keys beside the executable for a published
+        /// build, which is where the next "dotnet clean" takes them.
+        /// </remarks>
         public const String  DefaultDirectory = "certificates";
 
         /// <summary>

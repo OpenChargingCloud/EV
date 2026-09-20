@@ -94,14 +94,17 @@ namespace cloud.charging.open.EV.Web
         RunSessions            = 16,
 
         /// <summary>
-        /// Put certificates on this vehicle, and take them off: the Vehicle
-        /// certificate it is known by, the contract certificate that pays, and
-        /// the OEM provisioning certificate it was born with.
+        /// Put certificates on this vehicle and take them off, switch them on
+        /// and off, and say which of them a session uses.
         /// </summary>
         /// <remarks>
-        /// The three of them are the whole of who this vehicle is and who pays
-        /// for what it takes, which is why this is the one permission not even
-        /// the owner gets by default.
+        /// Both halves of the certificate store, because both are decisions
+        /// about trust. The credentials are the whole of who this vehicle is
+        /// and who pays for what it takes; the roots are the whole of whose
+        /// word it takes for a station, a contract and an OEM - and somebody
+        /// who can add a root can make this vehicle believe a station nobody
+        /// else would. That is why this is the one permission not even the
+        /// owner gets by default.
         /// </remarks>
         ManageCredentials      = 32
 
