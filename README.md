@@ -56,6 +56,20 @@ them by arrival order, which is not sorting them at all. For a session the
 reason is simpler — a vehicle has one cable, and two sessions would be two
 vehicles, the second one charging through the first one's battery.
 
+Each stage can also be asked on its own, and that is what `--slac`, `--t1s`
+and `--sdp` do. `AttachToBusAsync` is the one for the 10BASE-T1S bus below a
+megawatt coupler: a session joins that bus by itself where one is configured,
+so this exists for the same reason the pairing stage has its own entry point —
+joining and then finding no station over SDP is a different link from never
+being given a node identifier at all, and only asking the two questions
+separately tells them apart. It stays on the bus for two seconds before
+leaving, so the station's log shows a node that was asked and answered rather
+than one that came and went inside a single cycle.
+
+It answers rather than throws where it cannot run: `notConfigured` when no
+T1S transport has been named, `busy` while a session holds the bus. Both are
+states somebody can be in on purpose, and neither is a fault.
+
 
 ## The session is somebody else's code
 
