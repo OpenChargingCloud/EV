@@ -16,13 +16,14 @@ and belongs to whoever starts the thing; everything a vehicle *is* lives here.
 |---|---|
 | `EV.cs` | the vehicle: its clock, its log, its HTTP server, and one SDP discovery at a time |
 | `EV.Session.cs` | charging: one session at a time, and the handle a pause leaves behind |
-| `EV.Configuration.cs` | what the Configuration pages read and write - DNS, NTS, the battery, the link, the session |
+| `EV.Configuration.cs` | what the Configuration pages read and write - DNS, NTS, the battery, the link, the certificates, the session |
 | `EV.Clock.cs` | what time it thinks it is, and what that is worth |
 | `EV.Diagnostics.cs` | asking a name server or a time server something, step by step |
 | `HTTPAPI/EVHTTPAPI.cs` | the JSON API at `/api`, and the Server-Sent Events stream everything travels on |
 | `ISO15118/V2GLink.cs` | the wire below the charging cable: which interfaces could carry it, SLAC, the 10BASE-T1S bus of an MCS coupler, and the SDP client |
 | `ISO15118/V2GSession.cs` | one session, from the TCP connection to `SessionStop` |
-| `ISO15118/VehicleCredentials.cs` | the three certificates a vehicle carries, turned into the shapes a session needs |
+| `ISO15118/VehicleCredentials.cs` | the credentials a session was given, turned into the shapes it needs - and checked against the roots this vehicle believes |
+| `Certificates/` | the store: what a certificate is for, what may go in, and what survives a restart |
 | `Configuration/` | one record per section of the configuration file |
 | `Web/` | who may sign in, what each role may do, and the session cookie |
 | `Logging/` | one log for everything, in memory and on the stream |

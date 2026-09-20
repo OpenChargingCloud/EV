@@ -38,8 +38,10 @@ namespace cloud.charging.open.EV.ISO15118
     /// The certificates a vehicle carries, turned from files on disk into the shapes a session needs.
     /// </summary>
     /// <remarks>
-    /// Three certificates, and they are not interchangeable - mixing them up produces failures that read
-    /// like protocol bugs:
+    /// The files arrive already chosen: <see cref="Certificates.CertificateStore"/> holds them, a session
+    /// setting names one per role by its handle, and what reaches these methods is the path that handle
+    /// resolved to. They are not interchangeable, and mixing them up produces failures that read like
+    /// protocol bugs:
     ///
     /// <list type="bullet">
     ///   <item><b>Vehicle</b> - who this vehicle is. Presented in the TLS handshake, and for ISO 15118-20
@@ -48,7 +50,14 @@ namespace cloud.charging.open.EV.ISO15118
     ///         externally.</item>
     ///   <item><b>OEM provisioning</b> - what the vehicle was born with, and the only identity it has
     ///         before it holds a contract.</item>
+    ///   <item><b>tariff verification</b> - the public half of the pair a station signs its tariff with.
+    ///         The only one with no private key, because this side only ever verifies.</item>
     /// </list>
+    ///
+    /// Each of the first three is also checked against the roots this vehicle believes, where it holds any
+    /// of the right kind - see <see cref="Check"/>. That is this vehicle checking its own credentials, and
+    /// it catches the certificate issued under a hierarchy this vehicle is not part of, the one whose
+    /// sub-CA did not travel with it, and the one that was quietly replaced.
     ///
     /// The names come from the CharIN V2G second-generation PKI Certificate Policy rather than from
     /// ISO 15118 directly, which is deliberate: the certificates are ISO 15118's, and the Policy is
@@ -56,7 +65,8 @@ namespace cloud.charging.open.EV.ISO15118
     ///
     /// Every failure here is an <see cref="ArgumentException"/> naming the setting it came from, because
     /// the alternative - a file that turns out to be the wrong kind halfway through a handshake - shows up
-    /// as a station that appears to have hung up.
+    /// as a station that appears to have hung up. No password is taken: the store opens a PKCS#12 once, at
+    /// import, and keeps what it holds without one.
     /// </remarks>
     public static class VehicleCredentials
     {
@@ -90,7 +100,7 @@ namespace cloud.charging.open.EV.ISO15118
 
         #endregion
 
-        #region LoadOEM(Path, Password, Log)
+        #region LoadOEM(Path, OEMRoots, Log)
 
         /// <summary>
         /// The <b>OEM provisioning</b> credentials: what the vehicle was born with. With these the
