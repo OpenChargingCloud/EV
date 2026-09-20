@@ -37,7 +37,11 @@ Hermod's `EmbeddedContentSource` reads. So a build needs Node.js, and a
 deployment needs nothing but the DLL.
 
 `dotnet build -p:SkipFrontendBuild=true` leaves the npm step out and reuses
-whatever is already in `dist/`.
+whatever is already in `dist/` - or, where nothing is, builds a vehicle with no
+web interface at all: a warning rather than an error, because "no Node on this
+machine" is a reason to build the backend alone. Such a vehicle answers on its
+JSON API, serves a browser nothing, and says which of the two it is at every
+start.
 
 
 ## Nothing goes out on the link by itself
