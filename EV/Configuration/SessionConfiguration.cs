@@ -18,7 +18,6 @@
 #region Usings
 
 using System.Net;
-using System.Net.Sockets;
 using System.Diagnostics.CodeAnalysis;
 
 using Newtonsoft.Json.Linq;
@@ -568,28 +567,12 @@ namespace cloud.charging.open.EV.Configuration
         /// <summary>
         /// An IPv4 multicast group and a port, as <c>239.151.18.1:16118</c>.
         /// </summary>
-        public static Boolean TryParseT1SBus(String                          Text,
+        public static Boolean TryParseT1SBus(String                               Text,
                                              [NotNullWhen(true)] out IPEndPoint?  Bus)
-        {
 
-            Bus = null;
-
-            if (!IPEndPoint.TryParse(Text.Trim(), out var endpoint) ||
-                endpoint.Port == 0 ||
-                endpoint.Address.AddressFamily != AddressFamily.InterNetwork)
-            {
-                return false;
-            }
-
-            var first = endpoint.Address.GetAddressBytes()[0];
-
-            if (first < 224 || first > 239)
-                return false;
-
-            Bus = endpoint;
-            return true;
-
-        }
+            // The rule belongs to the medium rather than to either end of the
+            // cable, and the station reads the same one out of its own file.
+            => T1SConstants.TryParseBus(Text, out Bus);
 
         #endregion
 
