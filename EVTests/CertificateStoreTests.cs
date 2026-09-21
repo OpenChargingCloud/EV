@@ -144,6 +144,244 @@ namespace cloud.charging.open.EV.Tests
 
 
 
+        #region (helpers) PemWithKey(Key, Certificates) / EncryptedPemWithKey(...)
+
+        /// <summary>One PEM holding certificates and an unencrypted key, the way most tools write one.</summary>
+        private static Byte[] PemWithKey(ECDsa                     Key,
+                                         String                    KeyLabel,
+                                         params X509Certificate2[] Certificates)
+        {
+
+            var text = String.Concat(Certificates.Select(one => one.ExportCertificatePem() + Environment.NewLine));
+
+            var der  = KeyLabel == "EC PRIVATE KEY"
+                           ? Key.ExportECPrivateKey()
+                           : Key.ExportPkcs8PrivateKey();
+
+            return System.Text.Encoding.ASCII.GetBytes(text + new String(PemEncoding.Write(KeyLabel, der)) + Environment.NewLine);
+
+        }
+
+        /// <summary>The same, with the key encrypted under a password.</summary>
+        private static Byte[] EncryptedPemWithKey(ECDsa             Key,
+                                                  String            Password,
+                                                  X509Certificate2  Certificate)
+        {
+
+            var der = Key.ExportEncryptedPkcs8PrivateKey(
+                          Password,
+                          new PbeParameters(PbeEncryptionAlgorithm.Aes256Cbc, HashAlgorithmName.SHA256, 100_000)
+                      );
+
+            return System.Text.Encoding.ASCII.GetBytes(
+                       Certificate.ExportCertificatePem() + Environment.NewLine +
+                       new String(PemEncoding.Write("ENCRYPTED PRIVATE KEY", der)) + Environment.NewLine
+                   );
+
+        }
+
+        /// <summary>A certificate and the key that goes with it, kept apart so a PEM can be built by hand.</summary>
+        private static (X509Certificate2 Certificate, ECDsa Key) LeafWithKey(String            Name,
+                                                                             X509Certificate2  Issuer)
+        {
+
+            var key     = ECDsa.Create(ECCurve.NamedCurves.nistP521);
+            var request = new CertificateRequest($"CN={Name}", key, HashAlgorithmName.SHA512);
+
+            request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
+
+            var signed = request.Create(
+                             Issuer,
+                             DateTimeOffset.UtcNow.AddDays(-1),
+                             DateTimeOffset.UtcNow.AddDays(365),
+                             Guid.NewGuid().ToByteArray()
+                         );
+
+            return (signed, key);
+
+        }
+
+        #endregion
+
+        #region APemMayCarryItsKey()
+
+        [Test]
+        [TestCase("EC PRIVATE KEY")]
+        [TestCase("PRIVATE KEY")]
+        public void APemMayCarryItsKey(String KeyLabel)
+        {
+
+            var store = new CertificateStore(directory, log);
+
+            using var root = Root("An MO Root");
+            var (leaf, key) = LeafWithKey("A Contract", root);
+
+            using (leaf)
+            using (key)
+            {
+
+                Assert.That(store.Import(PemWithKey(key, KeyLabel, leaf), CertificateKind.Contract, null, null,
+                                         out var entry, out var error),
+                            Is.True, error);
+
+                Assert.Multiple(() => {
+                    Assert.That(entry!.HasPrivateKey,  Is.True, "the key in the file is the whole point");
+                    Assert.That(entry!.Label,          Is.EqualTo("A Contract"));
+                    Assert.That(entry!.KeyAlgorithm,   Is.EqualTo("ECDSA P-521"));
+                });
+
+                // And it is still there after a restart, which is what says the
+                // key survived being written out and read back.
+                var again = new CertificateStore(directory, log);
+                again.Reload();
+
+                Assert.That(again.Get(entry!.Id)?.HasPrivateKey, Is.True);
+
+            }
+
+        }
+
+        #endregion
+
+        #region AnEncryptedKeyInAPemIsOpenedWithItsPassword()
+
+        [Test]
+        public void AnEncryptedKeyInAPemIsOpenedWithItsPassword()
+        {
+
+            var store = new CertificateStore(directory, log);
+
+            using var root = Root("An MO Root");
+            var (leaf, key) = LeafWithKey("A Contract", root);
+
+            using (leaf)
+            using (key)
+            {
+
+                var pem = EncryptedPemWithKey(key, "opensesame", leaf);
+
+                Assert.That(store.Import(pem, CertificateKind.Contract, "opensesame", null, out var entry, out var error),
+                            Is.True, error);
+
+                Assert.That(entry!.HasPrivateKey, Is.True);
+
+            }
+
+        }
+
+        #endregion
+
+        #region AnEncryptedKeyWithoutItsPasswordSaysSo()
+
+        [Test]
+        public void AnEncryptedKeyWithoutItsPasswordSaysSo()
+        {
+
+            var store = new CertificateStore(directory, log);
+
+            using var root = Root("An MO Root");
+            var (leaf, key) = LeafWithKey("A Contract", root);
+
+            using (leaf)
+            using (key)
+            {
+
+                var pem = EncryptedPemWithKey(key, "opensesame", leaf);
+
+                Assert.That(store.Import(pem, CertificateKind.Contract, null, null, out _, out var error), Is.False);
+                Assert.That(error, Does.Contain("password"));
+
+                Assert.That(store.Import(pem, CertificateKind.Contract, "wrong", null, out _, out var error2), Is.False);
+                Assert.That(error2, Does.Contain("password"));
+
+            }
+
+        }
+
+        #endregion
+
+        #region TheLeafIsFoundWhereverItWasWritten()
+
+        [Test]
+        public void TheLeafIsFoundWhereverItWasWritten()
+        {
+
+            var store = new CertificateStore(directory, log);
+
+            using var root = Root("An MO Root");
+            var (leaf, key) = LeafWithKey("A Contract", root);
+
+            using (leaf)
+            using (key)
+            {
+
+                // Root first, leaf second - which is how plenty of tools write a
+                // chain, and the opposite of what "take the first one" assumes.
+                Assert.That(store.Import(PemWithKey(key, "PRIVATE KEY", root, leaf),
+                                         CertificateKind.Contract, null, null,
+                                         out var entry, out var error),
+                            Is.True, error);
+
+                Assert.Multiple(() => {
+                    Assert.That(entry!.Label,          Is.EqualTo("A Contract"), "the one holding the key is the leaf");
+                    Assert.That(entry!.HasPrivateKey,  Is.True);
+                    Assert.That(entry!.ChainLength,    Is.EqualTo(1), "and the root travelled with it as a sub-CA");
+                });
+
+            }
+
+        }
+
+        #endregion
+
+        #region AKeyThatBelongsToNothingInTheFileIsRefused()
+
+        [Test]
+        public void AKeyThatBelongsToNothingInTheFileIsRefused()
+        {
+
+            var store = new CertificateStore(directory, log);
+
+            using var root      = Root("An MO Root");
+            var (leaf, _)       = LeafWithKey("A Contract", root);
+            using var stranger  = ECDsa.Create(ECCurve.NamedCurves.nistP521);
+
+            using (leaf)
+            {
+
+                Assert.That(store.Import(PemWithKey(stranger, "PRIVATE KEY", leaf),
+                                         CertificateKind.Contract, null, null,
+                                         out _, out var error),
+                            Is.False, "a key for a certificate that is not in the file is not a credential");
+
+                Assert.That(error, Does.Contain("belongs to none"));
+
+            }
+
+        }
+
+        #endregion
+
+        #region APemWithoutAKeyIsStillARoot()
+
+        [Test]
+        public void APemWithoutAKeyIsStillARoot()
+        {
+
+            var store = new CertificateStore(directory, log);
+
+            using var root = Root("A V2G Root");
+
+            // The pairing must not have changed what a plain certificate does.
+            Assert.That(store.Import(Pem(root), CertificateKind.V2GRoot, null, null, out var entry, out var error),
+                        Is.True, error);
+
+            Assert.That(entry!.HasPrivateKey, Is.False);
+
+        }
+
+        #endregion
+
         #region ARootGoesIn()
 
         [Test]

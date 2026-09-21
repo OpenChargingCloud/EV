@@ -131,7 +131,12 @@ export const certificatesPage: Page = {
                             <input type="file" name="file" id="import-file"
                                    accept=".pem,.crt,.cer,.der,.p12,.pfx" ${busy ? html`disabled` : ''} />
                         </label>
-                        <p class="hint">PEM, DER or PKCS#12. It is copied into the store, not referenced where it is.</p>
+                        <p class="hint">
+                            PEM, DER or PKCS#12, copied into the store rather than referenced where it is.
+                            A certificate this vehicle <em>presents</em> has to bring its private key, so a
+                            PEM for one holds the key beside the certificate - which is how
+                            <code>openssl</code> writes a whole credential into one file.
+                        </p>
 
                         <label>What it is for
                             <select name="kind" id="import-kind" ${busy ? html`disabled` : ''}>

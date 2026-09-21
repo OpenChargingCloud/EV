@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2014-2026 GraphDefined GmbH <achim.friedland@graphdefined.com>
  * This file is part of EV <https://github.com/OpenChargingCloud/EV>
  *
@@ -930,6 +930,12 @@ namespace cloud.charging.open.EV.Certificates
                 if (collection.Count == 0)
                     throw new ArgumentException("That file looks like PEM, and holds no certificate this vehicle can read.");
 
+                // A PEM that carries its key as well is one file for a whole
+                // credential, and that is how most tools hand one over.
+                // ImportFromPem takes the certificates and silently passes the
+                // key by, so pairing it is done here or not at all.
+                AttachPrivateKey(collection, asText, Password);
+
                 return collection;
 
             }
@@ -1009,6 +1015,154 @@ namespace cloud.charging.open.EV.Certificates
             {
                 return false;
             }
+
+        }
+
+        #endregion
+
+        #region (private static) AttachPrivateKey(Collection, Pem, Password)
+
+        /// <summary>
+        /// Where a PEM carries a private key beside its certificates, give it to
+        /// the one it belongs to.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see cref="X509Certificate2Collection.ImportFromPem"/> reads certificates and nothing else: a key
+        /// block in the same file is passed over without a word. That is the right behaviour for a trust
+        /// store and the wrong one for a credential, where one PEM holding a leaf, its sub-CAs and its key
+        /// is how most tools hand a whole identity over - so the pairing happens here.
+        /// </para>
+        /// <para>
+        /// Which certificate the key belongs to is not assumed from the order. Every certificate in the
+        /// file is offered the key and the one it actually matches takes it, because a chain may be written
+        /// leaf-first or root-first and both are common. The matching one is put at the front afterwards,
+        /// so that everything downstream - which takes the first certificate, or the one with a key - finds
+        /// the leaf where it expects it.
+        /// </para>
+        /// <para>
+        /// An encrypted key block is opened with the same password an encrypted PKCS#12 would be, which is
+        /// the one somebody already typed. A key that matches nothing in the file is an error rather than a
+        /// silent omission: it is a file somebody believed was a whole credential, and the alternative is a
+        /// certificate that is quietly refused two steps later for having no key.
+        /// </para>
+        /// </remarks>
+        private static void AttachPrivateKey(X509Certificate2Collection  Collection,
+                                             String                      Pem,
+                                             String?                     Password)
+        {
+
+            var key = KeyBlockOf(Pem);
+
+            if (key is null)
+                return;
+
+            // Whether the key is encrypted is a property of the block, not of
+            // whether somebody happened to type a password: a PEM whose key is
+            // in the clear must not be opened with the encrypted reader just
+            // because a password was left in the form.
+            var encrypted = key.StartsWith("-----BEGIN ENCRYPTED PRIVATE KEY-----", StringComparison.Ordinal);
+
+            if (encrypted && Password is not { Length: > 0 })
+                throw new ArgumentException(
+                          "That file's private key is encrypted. Give the password that opens it.");
+
+            for (var i = 0; i < Collection.Count; i++)
+            {
+
+                var certificate = Collection[i];
+
+                if (certificate.HasPrivateKey)
+                    return;
+
+                X509Certificate2 paired;
+
+                try
+                {
+                    paired = encrypted
+                                 ? X509Certificate2.CreateFromEncryptedPem(certificate.ExportCertificatePem(), key, Password!)
+                                 : X509Certificate2.CreateFromPem         (certificate.ExportCertificatePem(), key);
+                }
+                catch (ArgumentException)
+                {
+                    // Not this certificate's key. Try the next one.
+                    continue;
+                }
+                catch (CryptographicException exception)
+                {
+                    // A key this vehicle cannot open at all: wrong password, or
+                    // a kind of key it does not carry. Worth saying once rather
+                    // than once per certificate in the file.
+                    throw new ArgumentException(
+                              encrypted
+                                  ? $"That file's private key could not be opened - wrong password? ({exception.Message})"
+                                  : $"That file's private key is of a kind this vehicle cannot read. ({exception.Message})");
+                }
+
+                // Round-tripped through PKCS#12 so that the key is exportable:
+                // a key attached from PEM is ephemeral, and the store has to
+                // write it out again - and the BouncyCastle backend and the OEM
+                // ECDH unwrap both need to export it later.
+                using (paired)
+                {
+
+                    var exportable = X509CertificateLoader.LoadPkcs12(
+                                         paired.Export(X509ContentType.Pkcs12) ?? [],
+                                         (String?) null,
+                                         X509KeyStorageFlags.Exportable | X509KeyStorageFlags.EphemeralKeySet
+                                     );
+
+                    Collection[i] = exportable;
+
+                }
+
+                // The one with the key is the leaf, wherever it was written.
+                if (i > 0)
+                {
+                    (Collection[0], Collection[i]) = (Collection[i], Collection[0]);
+                }
+
+                return;
+
+            }
+
+            throw new ArgumentException(
+                      "That file carries a private key that belongs to none of the certificates in it. " +
+                      "A credential is one leaf, its key, and the sub-CAs above it.");
+
+        }
+
+        #endregion
+
+        #region (private static) KeyBlockOf(Pem)
+
+        /// <summary>
+        /// The first private key block in a PEM, whichever of the four spellings it uses, or nothing.
+        /// </summary>
+        private static String? KeyBlockOf(String Pem)
+        {
+
+            foreach (var label in new[] { "PRIVATE KEY", "EC PRIVATE KEY", "RSA PRIVATE KEY", "ENCRYPTED PRIVATE KEY" })
+            {
+
+                var opening = $"-----BEGIN {label}-----";
+                var closing = $"-----END {label}-----";
+
+                var from = Pem.IndexOf(opening, StringComparison.Ordinal);
+
+                if (from < 0)
+                    continue;
+
+                var to = Pem.IndexOf(closing, from, StringComparison.Ordinal);
+
+                if (to < 0)
+                    continue;
+
+                return Pem[from..(to + closing.Length)];
+
+            }
+
+            return null;
 
         }
 
