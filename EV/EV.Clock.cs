@@ -120,8 +120,20 @@ namespace cloud.charging.open.EV
                                  TimeCheckEvery
                              );
 
+            // Named rather than counted, because this is written once at a
+            // start and somebody reading it is checking that the file took
+            // effect. "4 time servers" would not tell them which four.
+            //
+            // The group and not ntsClient.Hostname, which is what this line
+            // used to say: the check below has asked the whole group since
+            // groups arrived, so naming one server described neither what was
+            // asked nor what had to answer - and did it in the one line
+            // somebody reads to find out.
+            var asking = timeSources.Bands().SelectMany(band => band).Select(source => source.Hostname.ToString()).ToArray();
+
             Log.Info(
-                $"The clock of this vehicle will be checked against {ntsClient.Hostname} every {TimeCheckEvery.TotalMinutes:F0} minute(s)" +
+                $"The clock of this vehicle will be checked against {String.Join(", ", asking)} every {TimeCheckEvery.TotalMinutes:F0} minute(s)" +
+                (asking.Length > 1 ? $", at least {timeSources.MinServers} of which must answer" : "") +
                 (LegalTimeAuthority is not null ? $", which the operator says is {LegalTimeAuthority}." : "."),
                 "nts", "clock"
             );
