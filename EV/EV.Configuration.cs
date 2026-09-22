@@ -419,6 +419,22 @@ namespace cloud.charging.open.EV
 
             var changed  = new List<String>();
 
+            #region The group of time servers
+
+            // Rebuilt from the section rather than patched: it is a list, and
+            // working out which entry changed in order to report it would say
+            // less than naming the servers, which is what happens below.
+            var wasAsking  = String.Join(", ", timeSources.Bands().SelectMany(band => band).Select(source => source.Hostname.ToString()));
+
+            timeSources    = Configuration.ToGroup(Configuration.Hostname ?? ntsClient.Hostname);
+
+            var nowAsking  = String.Join(", ", timeSources.Bands().SelectMany(band => band).Select(source => source.Hostname.ToString()));
+
+            if (wasAsking != nowAsking)
+                changed.Add($"time servers = {nowAsking}");
+
+            #endregion
+
             var hostname = Configuration.Hostname  ?? ntsClient.Hostname;
             var ntsKE    = Configuration.NTSKEPort ?? ntsClient.NTSKE_Port;
             var ntp      = Configuration.NTPPort   ?? ntsClient.NTP_Port;

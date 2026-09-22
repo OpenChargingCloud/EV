@@ -27,7 +27,9 @@ using org.GraphDefined.Vanaheimr.Hermod.DNS;
 using org.GraphDefined.Vanaheimr.Hermod.HTTP;
 using org.GraphDefined.Vanaheimr.Hermod.Mail;
 using NullMailer = org.GraphDefined.Vanaheimr.Hermod.SMTP.NullMailer;
+using org.GraphDefined.Vanaheimr.Norn.Monitoring;
 using org.GraphDefined.Vanaheimr.Norn.NTS;
+using org.GraphDefined.Vanaheimr.Norn.TimeSync;
 
 using cloud.charging.open.protocols.ISO15118.Discovery;
 
@@ -133,6 +135,18 @@ namespace cloud.charging.open.EV
 
         private readonly  DNSClient                       dnsClient;
         private           NTSClient                       ntsClient;
+
+        /// <summary>
+        /// Every time server of this vehicle, and the rules for believing them.
+        /// </summary>
+        /// <remarks>
+        /// Beside the single client rather than instead of it, because the two
+        /// answer different questions. The group answers "what is the time",
+        /// which several servers should agree on before a clock moves. The
+        /// client answers "what is that one server doing", which is what the
+        /// detailed test on the page asks and which a group would only blur.
+        /// </remarks>
+        private           TimeSourceGroup                 timeSources;
 
         /// <summary>
         /// The name servers this vehicle would ask, whether or not name
@@ -331,6 +345,11 @@ namespace cloud.charging.open.EV
         /// Where this vehicle reads the time.
         /// </summary>
         public NTSClient              NTSClient                    => ntsClient;
+
+        /// <summary>
+        /// The time servers of this vehicle, as a group.
+        /// </summary>
+        public TimeSourceGroup        TimeSources                  => timeSources;
 
         /// <summary>
         /// Whether this vehicle resolves names at all.
@@ -537,6 +556,17 @@ namespace cloud.charging.open.EV
                                                   DNSClient:     dnsClient,
                                                   TimeProvider:  this.TimeProvider
                                               );
+
+            // A group of one until the file says otherwise, which is what a
+            // vehicle that was handed a client and nothing else has.
+            this.timeSources   = new TimeSourceGroup(
+                                     "legal",
+                                     [ new NTSServerEndpoint(
+                                           ntsClient.Hostname,
+                                           ntsClient.NTSKE_Port,
+                                           ntsClient.NTP_Port
+                                       ) ]
+                                 );
 
             // Last, and that is the whole precedence rule: what this
             // constructor was handed holds until the file says otherwise, and
@@ -1248,6 +1278,13 @@ namespace cloud.charging.open.EV
 
                    new JProperty("time",       new JObject(
                        new JProperty("nts",            ntsClient.Hostname.ToString()),
+                       new JProperty("timeSources",    new JArray(
+                           timeSources.Bands().SelectMany(band => band).Select(source => new JObject(
+                               new JProperty("hostname",  source.Hostname.ToString()),
+                               new JProperty("priority",  source.Priority)
+                           ))
+                       )),
+                       new JProperty("minServers",     timeSources.MinServers),
                        new JProperty("now",            TimeProvider.GetUtcNow().ToString("o"))
                    )),
 
