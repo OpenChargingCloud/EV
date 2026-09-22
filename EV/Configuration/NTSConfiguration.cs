@@ -182,7 +182,7 @@ namespace cloud.charging.open.EV.Configuration
 
                 if (minServers > servers.Count(server => server.Enabled))
                 {
-                    Error = $"'nts.minServers' is {minServers}, which more servers than 'nts.servers' has switched on.";
+                    Error = $"'nts.minServers' is {minServers}, which is more servers than 'nts.servers' has switched on.";
                     return false;
                 }
 
