@@ -129,6 +129,46 @@ namespace cloud.charging.open.EV.Tests
 
         #endregion
 
+        #region TheDefaultIsFourPeersAndAQuorumOfTwo()
+
+        /// <summary>
+        /// What a vehicle asks when its configuration says nothing at all.
+        /// </summary>
+        /// <remarks>
+        /// One band rather than two: the PTB's four are peers, and splitting
+        /// them into a first choice and a fallback would say something about
+        /// them that is not true. A quorum of two, so that one host being away
+        /// is survivable and one host being wrong is visible.
+        /// </remarks>
+        [Test]
+        public void TheDefaultIsFourPeersAndAQuorumOfTwo()
+        {
+
+            var group = NTSConfiguration.DefaultGroup();
+            var bands = group.Bands();
+
+            Assert.Multiple(() =>
+            {
+
+                Assert.That(bands,             Has.Count.EqualTo(1),  "peers, not a first choice and a fallback");
+                Assert.That(bands[0],          Has.Count.EqualTo(4));
+                Assert.That(group.MinServers,  Is.EqualTo(2));
+
+                Assert.That(bands[0].Select(source => source.Hostname.ToString()),
+                            Is.EqualTo(new[] { "ptbtime1.ptb.de.", "ptbtime2.ptb.de.",
+                                               "ptbtime3.ptb.de.", "ptbtime4.ptb.de." }));
+
+                // The single-server default is the first of them, so a client
+                // built the old way and this group cannot name different hosts.
+                Assert.That(bands[0][0].Hostname.ToString(),
+                            Is.EqualTo(DomainName.Parse(NTSConfiguration.DefaultHostname).ToString()));
+
+            });
+
+        }
+
+        #endregion
+
         #region AnEmptySectionFallsBackToTheGivenServer()
 
         [Test]
