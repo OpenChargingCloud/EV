@@ -101,7 +101,12 @@ export const ntsPage: Page = {
 
                     <section class="card">
 
-                        <h2><i class="fa-solid fa-clock"></i> Server</h2>
+                        <h2><i class="fa-solid fa-clock"></i> Server for the detailed test</h2>
+
+                        <p class="hint">
+                            The host and ports the detailed test below starts from. Synchronisation
+                            does not come through here - it asks the group of time servers above.
+                        </p>
 
                         <form id="nts-form" class="form-stack">
 
@@ -201,7 +206,7 @@ export const ntsPage: Page = {
                     `}
 
                     <section class="card">
-                        <h2><i class="fa-solid fa-cookie-bite"></i> Cookies</h2>
+                        <h2><i class="fa-solid fa-cookie-bite"></i> Cookies of that client</h2>
                         <div class="kv-list">
                             ${Object.entries(configuration.cookies).map(([key, value]) => html`
                                 <div class="kv">
@@ -210,11 +215,20 @@ export const ntsPage: Page = {
                                 </div>
                             `)}
                         </div>
-                        <p class="hint">One cookie is spent per request and a new one usually comes back with the answer.</p>
+                        <p class="hint">
+                            One cookie is spent per request and a new one usually comes back with the
+                            answer - but these count the configured client, and the detailed test
+                            builds a fresh one each time it runs. They stay at zero until that
+                            changes. What a synchronisation spends is shown per server above.
+                        </p>
                     </section>
 
                     <section class="card">
                         <h2><i class="fa-solid fa-scale-balanced"></i> Cookie pool policy</h2>
+
+                        <p class="hint">
+                            What any new client starts with, the detailed test's and the group's alike.
+                        </p>
                         <div class="kv-list">
                             ${Object.entries(configuration.policy).map(([key, value]) => html`
                                 <div class="kv">
@@ -227,7 +241,7 @@ export const ntsPage: Page = {
 
                     <section class="card">
 
-                        <h2><i class="fa-solid fa-key"></i> Key exchange</h2>
+                        <h2><i class="fa-solid fa-key"></i> Key exchange of that client</h2>
 
                         <div class="kv-list">
                             <div class="kv">
