@@ -76,6 +76,15 @@ h1, h2 {
     font-size: 0.85rem;
 }
 
+// A commit is forty characters that have to survive being copied out of here
+// and pasted into a checkout, so it is never shortened and never truncated -
+// it wraps instead. Monospaced because that is what makes two of them
+// comparable at a glance.
+.commit {
+    font-family:  ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    word-break:   break-all;
+}
+
 
 // Buttons and forms
 
