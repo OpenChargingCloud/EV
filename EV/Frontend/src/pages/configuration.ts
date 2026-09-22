@@ -72,6 +72,9 @@ export const configurationPage: Page = {
                                         <span class="v">
                                             ${formatValue(assembly.version)}
                                             <span class="muted small">${formatValue(assembly.assembly)}</span>
+                                            ${typeof assembly.commit === 'string'
+                                                  ? html`<span class="muted small">${abbreviateCommit(assembly.commit)}</span>`
+                                                  : ''}
                                         </span>
                                     </div>
                                 `)}
@@ -110,6 +113,23 @@ export const configurationPage: Page = {
  * One section: every field the vehicle sent, in the order it sent them, with
  * anything that is itself a list of things rendered as a nested block.
  */
+/**
+ * A commit short enough for a list, still long enough to find.
+ *
+ * The dirty marker survives the shortening on purpose: a build from a tree
+ * with uncommitted changes is not the commit it names, and a bug report that
+ * hides that sends somebody to read the wrong code.
+ */
+function abbreviateCommit(commit: string): string {
+
+    const dirty  = commit.endsWith('-dirty');
+    const hash   = dirty ? commit.slice(0, -6) : commit;
+
+    return hash.slice(0, 7) + (dirty ? '-dirty' : '');
+
+}
+
+
 function card(title:    string,
               icon:     string,
               values:   Record<string, unknown>,
