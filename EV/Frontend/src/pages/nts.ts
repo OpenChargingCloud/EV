@@ -217,9 +217,8 @@ export const ntsPage: Page = {
                         </div>
                         <p class="hint">
                             One cookie is spent per request and a new one usually comes back with the
-                            answer - but these count the configured client, and the detailed test
-                            builds a fresh one each time it runs. They stay at zero until that
-                            changes. What a synchronisation spends is shown per server above.
+                            answer. These count the client the detailed test uses, so they grow each
+                            time it runs. What a synchronisation spends is shown per server above.
                         </p>
                     </section>
 
@@ -245,7 +244,7 @@ export const ntsPage: Page = {
 
                         <div class="kv-list">
                             <div class="kv">
-                                <span class="k">Exchanges so far</span>
+                                <span class="k">Automatic exchanges</span>
                                 <span class="v">${configuration.keyExchange.automatic}</span>
                             </div>
                             <div class="kv">
@@ -259,7 +258,7 @@ export const ntsPage: Page = {
                         </div>
 
                         ${configuration.keyExchange.lastExchange === null
-                              ? html`<p class="muted small">No key exchange has happened yet.</p>`
+                              ? html`<p class="muted small">No exchange has been renegotiated automatically yet - the detailed test asks for its own.</p>`
                               : html`
                                   <div class="kv-list">
                                       <div class="kv">

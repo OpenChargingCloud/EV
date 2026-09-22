@@ -518,14 +518,33 @@ namespace cloud.charging.open.EV
 
             #endregion
 
-            var asking = new NTSClient(
-                             host,
-                             NTSKE_Port:    configured.NTSKE_Port,
-                             NTP_Port:      configured.NTP_Port,
-                             Timeout:       configured.Timeout,
-                             DNSClient:     dnsClient,
-                             TimeProvider:  TimeProvider
-                         );
+            // The configured client itself when the exchange is with the host it
+            // was built for, and a fresh one only when this test was pointed at
+            // a different name.
+            //
+            // A throwaway client per test spent its cookies into the bin: the
+            // NTS page reported zero cookies and "no key exchange has happened
+            // yet" however often somebody pressed the button, which is a page
+            // describing nothing while looking like a measurement. Reusing the
+            // configured client is what makes those numbers mean something, and
+            // it is also what a second test now shows - an exchange being
+            // renegotiated over a pool that already holds cookies, which is the
+            // case that used to answer NTSN.
+            //
+            // Equals and not ==: both sides are DomainName here so the operator
+            // would bind correctly, but this comparison is one refactoring away
+            // from being made against IDomainName, where == is reference
+            // equality and silently answers "different" for the same name.
+            var asking = host.Equals(configured.Hostname)
+                             ? configured
+                             : new NTSClient(
+                                   host,
+                                   NTSKE_Port:    configured.NTSKE_Port,
+                                   NTP_Port:      configured.NTP_Port,
+                                   Timeout:       configured.Timeout,
+                                   DNSClient:     dnsClient,
+                                   TimeProvider:  TimeProvider
+                               );
 
             try
             {
