@@ -149,22 +149,60 @@ namespace cloud.charging.open.EV.ISO15118
 
         #endregion
 
+        #region Choose(Candidates)
+
+        /// <summary>
+        /// Which of several candidates to use when nobody said which.
+        /// </summary>
+        /// <remarks>
+        /// A V2G port carries IPv6 link-local and nothing else - there is no
+        /// IPv4 anywhere in ISO 15118 - while the interface a machine is
+        /// administered over practically always has an IPv4 address. So the one
+        /// candidate without one is very probably the port with the charging
+        /// station behind it, and on the usual two-interface bench that decides
+        /// it without anybody configuring anything.
+        ///
+        /// It stays a guess and is treated as one, but never a guess that is
+        /// known to be wrong. With two powerline modems beside one management
+        /// interface the question is open between the modems - and answering it
+        /// with the management interface, on the grounds that the modems cannot
+        /// be told apart, would pick the one candidate that is certainly not the
+        /// answer. So the ones without IPv4 are preferred even when there are
+        /// several of them, and only a machine where every candidate has an IPv4
+        /// address falls back to the first, which is what this gave before there
+        /// was any rule.
+        ///
+        /// Whoever takes this answer says out loud which interface it got and
+        /// why, because a guess that does not announce itself is how somebody
+        /// spends an afternoon wondering which cable is in use.
+        /// </remarks>
+        public static V2GNetworkInterface? Choose(IReadOnlyList<V2GNetworkInterface> Candidates)
+        {
+
+            if (Candidates.Count == 0)
+                return null;
+
+            var withoutIPv4 = Candidates.Where(candidate => !candidate.HasIPv4Address).ToArray();
+
+            return withoutIPv4.Length > 0
+                       ? withoutIPv4[0]
+                       : Candidates[0];
+
+        }
+
+        #endregion
+
         #region FindInterface(Name = null)
 
         /// <summary>
-        /// The interface by name, or - with no name - the first candidate.
+        /// The interface by name, or - with no name - whichever Choose picks.
         /// Null when there is no such interface, or none at all.
         /// </summary>
-        /// <remarks>
-        /// "The first candidate" is the right guess on a machine with one
-        /// cable and the wrong one on a machine with six, so everything that
-        /// takes this answer says out loud which interface it got.
-        /// </remarks>
         public static V2GNetworkInterface? FindInterface(String? Name = null)
         {
 
             if (String.IsNullOrWhiteSpace(Name))
-                return Candidates().FirstOrDefault();
+                return Choose(Candidates());
 
             try
             {
