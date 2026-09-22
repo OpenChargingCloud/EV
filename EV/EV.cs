@@ -149,6 +149,19 @@ namespace cloud.charging.open.EV
         private           TimeSourceGroup                 timeSources;
 
         /// <summary>
+        /// What actually asks the servers of a group.
+        /// </summary>
+        /// <remarks>
+        /// One engine for the life of this vehicle, and that is not tidiness: it
+        /// holds the key exchange of each server between rounds, and a new
+        /// engine per synchronisation would pay a TLS handshake to every server
+        /// every time and throw the cookies away unspent. It refreshes an
+        /// exchange when it is older than half an hour or down to its last
+        /// cookie, which is the same discipline the single client follows.
+        /// </remarks>
+        private readonly  MeasurementEngine               timeEngine;
+
+        /// <summary>
         /// The name servers this vehicle would ask, whether or not name
         /// resolution is switched on at the moment.
         /// </summary>
@@ -556,6 +569,15 @@ namespace cloud.charging.open.EV
                                                   DNSClient:     dnsClient,
                                                   TimeProvider:  this.TimeProvider
                                               );
+
+            this.timeEngine    = new MeasurementEngine(
+                                     new MonitoringConfig {
+                                         DroneId       = "vehicle",
+                                         NTPTimeout    = TimeSpan.FromSeconds(5),
+                                         NTSKETimeout  = TimeSpan.FromSeconds(10)
+                                     },
+                                     this.TimeProvider
+                                 );
 
             // A group of one until the file says otherwise, which is what a
             // vehicle that was handed a client and nothing else has.

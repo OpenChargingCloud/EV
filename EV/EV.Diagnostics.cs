@@ -24,6 +24,7 @@ using Newtonsoft.Json.Linq;
 
 using org.GraphDefined.Vanaheimr.Hermod.DNS;
 using org.GraphDefined.Vanaheimr.Norn.NTS;
+using org.GraphDefined.Vanaheimr.Norn.TimeSync;
 
 #endregion
 
@@ -642,6 +643,21 @@ namespace cloud.charging.open.EV
 
         #endregion
 
+        /// <summary>
+        /// Ask this vehicle's group of time servers what the time is.
+        /// </summary>
+        /// <remarks>
+        /// The group and not the single client, because a clock that a charge
+        /// is billed by should not move on the word of one server. What comes
+        /// back is the group's verdict - the median of the servers that
+        /// answered and authenticated, how many there were, how far apart they
+        /// were - and a line for each server, because a log book records what
+        /// was asked and what each one said, not only the conclusion.
+        ///
+        /// The detailed test beside this is the other question and keeps its
+        /// own path: one server, its key exchange, its cookies, its round trip.
+        /// A group cannot answer that, having four of each.
+        /// </remarks>
         public async Task<JObject> SyncTimeAsync(CancellationToken CancellationToken = default)
         {
 
@@ -651,194 +667,93 @@ namespace cloud.charging.open.EV
                 return Failed("NTS is switched off on this vehicle.");
             }
 
-            var client     = ntsClient;
+            var group      = timeSources;
+            var asked      = group.Bands().SelectMany(band => band).Select(source => source.Hostname.ToString()).ToArray();
             var stopwatch  = Stopwatch.StartNew();
+
+            Log.Info($"NTS: asking the {asked.Length} time server(s) of group '{group.Name}' ...", "nts", "test");
 
             try
             {
 
-                #region NTS-KE, but only when there is nothing left to spend
-
-                // The key exchange is the expensive half - a TCP connection, a
-                // TLS handshake and a certificate to check, which was 205 ms of
-                // a 230 ms exchange with ptbtime1.ptb.de - and the eight
-                // cookies it hands over are what make the cheap half
-                // repeatable. One exchange per sync would pay that handshake
-                // every time and throw seven cookies away unspent, which is
-                // the waste the pool exists to avoid.
-                //
-                // It also keeps the two halves of a credential together. The
-                // server recovers the keys of the issuing exchange out of the
-                // cookie and checks the request against those, so the cookie
-                // spent and the key the request is sealed with have to come
-                // from the same exchange. Running a new one while the pool
-                // still holds cookies is how the two come to be mixed - and
-                // the answer to that is a Kiss-o-Death NTSN, which is
-                // indistinguishable from a replay.
-                var response  = client.AvailableCookieCount > 0
-                                    ? client.LastNTSKEResponse
-                                    : null;
-
-                var reused    = response is not null;
-
-                if (response is null)
-                {
-
-                    Log.Info($"NTS: key exchange with {client.Hostname}:{client.NTSKE_Port} ...", "nts", "ntske", "test");
-
-                    var keyExchange = await client.GetNTSKERecords(CancellationToken: CancellationToken);
-
-                    if (!keyExchange.Success || keyExchange.Response is null)
-                    {
-
-                        Log.Error(
-                            $"NTS: the key exchange with {client.Hostname} failed after {stopwatch.ElapsedMilliseconds} ms " +
-                            $"({keyExchange.ErrorCategory}): {keyExchange.ErrorMessage}",
-                            "nts", "ntske", "test"
-                        );
-
-                        return Remember(Failed($"The key exchange failed: {keyExchange.ErrorMessage}",
-                                               new JProperty("step",           "ntske"),
-                                               new JProperty("errorCategory",  keyExchange.ErrorCategory.ToString())));
-
-                    }
-
-                    response = keyExchange.Response;
-
-                    foreach (var warning in response.WarningMessages)
-                        Log.Warning($"NTS: the key exchange with {client.Hostname} warned: {warning}", "nts", "ntske", "test");
-
-                    Log.Info(
-                        $"NTS: the key exchange with {client.Hostname} succeeded in {stopwatch.ElapsedMilliseconds} ms - " +
-                        $"{response.AEADAlgorithm}, {response.Cookies.Count()} cookie(s)" +
-                        (response.NTPv4ServerNames.Any()
-                             ? $", NTP server(s): {String.Join(", ", response.NTPv4ServerNames)}"
-                             : "") + ".",
-                        "nts", "ntske", "test"
-                    );
-
-                    // The cookies are what the NTP request below spends, so they
-                    // go into the pool before it is sent and not after.
-                    client.SeedCookies(response);
-
-                }
-
-                else
-                    Log.Info(
-                        $"NTS: the key exchange with {client.Hostname} is still good for " +
-                        $"{client.AvailableCookieCount} more request(s), so none was run.",
-                        "nts", "ntske", "test"
-                    );
-
-                #endregion
-
-                #region NTP over NTS
-
-                var afterKeyExchange = stopwatch.ElapsedMilliseconds;
-
-                Log.Info($"NTS: authenticated NTP request to {client.Hostname}:{client.NTP_Port} ...", "nts", "ntp", "test");
-
-                // The exchange goes with the request, and not only the cookies
-                // it issued. Without it the client has no idea which server was
-                // negotiated or on which port, and falls back to the host the
-                // exchange happened on at port 123 - measured against
-                // nts.netnod.se, which names a separate address on port 4123,
-                // that was a ten second timeout every time while the detailed
-                // test beside it got an answer in 53 ms.
-                var query = await client.QueryTime(NTSKEResponse:      response,
-                                                   CancellationToken:  CancellationToken);
+                var verdict = await group.Measure(timeEngine, dnsClient, CancellationToken);
 
                 stopwatch.Stop();
 
-                if (!query.Success || query.Response is null)
-                {
+                #region What the group concluded, and what each server said
 
-                    Log.Error(
-                        $"NTS: the NTP request to {client.Hostname} failed after {stopwatch.ElapsedMilliseconds} ms " +
-                        $"({query.ErrorCategory}): {query.ErrorMessage}",
-                        "nts", "ntp", "test"
-                    );
+                var servers = new JArray(
+                                  verdict.Results.Select(result => new JObject(
+                                      new JProperty("hostname",       result.ServerHostname.ToString()),
+                                      new JProperty("ok",             TimeSyncVerdict.CanBeTrusted(result)),
+                                      new JProperty("offset_ms",      result.NTP?.Offset.TotalMilliseconds),
+                                      new JProperty("roundTrip_ms",   result.NTP?.RoundTripDelay.TotalMilliseconds),
+                                      new JProperty("authenticated",  result.NTP?.NTSAuthenticationValid),
+                                      new JProperty("keyExchange",    result.NTSKEFromCache ? "reused" : "new"),
+                                      new JProperty("error",          result.ErrorMessage?.ToString())
+                                  ))
+                              );
 
-                    return Remember(Failed($"The NTP request failed: {query.ErrorMessage}",
-                                           new JProperty("step",           "ntp"),
-                                           new JProperty("errorCategory",  query.ErrorCategory.ToString()),
-                                           new JProperty("ntske",          new JObject(
-                                               new JProperty("reused",         reused),
-                                               new JProperty("runtime_ms",     afterKeyExchange),
-                                               new JProperty("aeadAlgorithm",  response.AEADAlgorithm.ToString()),
-                                               new JProperty("cookies",        response.Cookies.Count())
-                                           ))));
-
-                }
+                var groupJSON = new JObject(
+                                    new JProperty("name",               group.Name),
+                                    new JProperty("answered",           verdict.Answered),
+                                    new JProperty("required",           verdict.Required),
+                                    new JProperty("offset_ms",          verdict.Offset?.TotalMilliseconds),
+                                    new JProperty("spread_ms",          verdict.Spread?.TotalMilliseconds),
+                                    new JProperty("deviationExceeded",  verdict.DeviationExceeded)
+                                );
 
                 #endregion
 
-                // A query that finds the pool empty runs a key exchange of its
-                // own (RFC 8915 section 5.7), so what is reported below has to
-                // be the exchange the request was actually sealed under and
-                // not the one this method picked up.
-                response      = client.LastNTSKEResponse ?? response;
+                if (!verdict.IsUsable)
+                {
 
-                var roundTrip = query.StopwatchRoundTripTime;
+                    Log.Error($"NTS: group '{group.Name}' produced no time after {stopwatch.ElapsedMilliseconds} ms: {verdict}.", "nts", "test");
 
-                // What the exchange was actually for. The clock of this vehicle
-                // is not stepped by it - see the remarks on this method - so
-                // the offset is the whole of the result: it is the difference
-                // between what this vehicle believes and what a server that
-                // knows was saying at the same moment.
-                var offset    = query.Response?.ClockOffset;
+                    return Remember(Failed(
+                               verdict.Outcome == TimeSyncOutcome.NothingAnswered
+                                   ? "No time server answered."
+                                   : $"Only {verdict.Answered} of {verdict.Required} time server(s) answered.",
+                               new JProperty("runtime_ms",  stopwatch.ElapsedMilliseconds),
+                               new JProperty("group",       groupJSON),
+                               new JProperty("servers",     servers)
+                           ));
+
+                }
 
                 lastTimeCheck        = TimeProvider.GetUtcNow();
-                lastTimeCheckOffset  = offset;
-                lastTimeCheckServer  = client.Hostname.ToString();
+                lastTimeCheckOffset  = verdict.Offset;
+                lastTimeCheckServer  = $"{group.Name} ({verdict.Answered} of {asked.Length} server(s))";
 
-                Log.Notice(
-                    $"NTS: {client.Hostname} answered in {stopwatch.ElapsedMilliseconds} ms" +
-                    (offset.HasValue ? $", this vehicle's clock is {offset.Value.TotalMilliseconds:+0.0;-0.0;0} ms off" : "") +
-                    (roundTrip.HasValue ? $" (round trip {roundTrip.Value.TotalMilliseconds:F1} ms)" : "") +
-                    $", {query.RemainingCookiesAfterQuery} cookie(s) left.",
-                    "nts", "ntp", "test"
-                );
+                // Written down rather than acted on, which is what the white
+                // paper asks for: the disagreement belongs in the metrological
+                // log book, and the time is still a time.
+                if (verdict.DeviationExceeded)
+                    Log.Warning(
+                        $"NTS: the time servers of group '{group.Name}' disagree by " +
+                        $"{verdict.Spread!.Value.TotalMilliseconds:F1} ms, which reaches the agreed deviation of " +
+                        $"{group.MaxDeviation.TotalSeconds:F0} s.",
+                        "nts", "test"
+                    );
+
+                Log.Notice($"NTS: group '{group.Name}' answered in {stopwatch.ElapsedMilliseconds} ms - {verdict}.", "nts", "test");
 
                 return Remember(new JObject(
-
-                           new JProperty("ok",             true),
-                           new JProperty("server",         client.Hostname.ToString()),
-                           new JProperty("remote",         query.RemoteDescription),
-                           new JProperty("at",             TimeProvider.GetUtcNow().ToString("o")),
-                           new JProperty("runtime_ms",     stopwatch.ElapsedMilliseconds),
-
-                           new JProperty("ntske",          new JObject(
-                               new JProperty("reused",             reused),
-                               new JProperty("runtime_ms",         afterKeyExchange),
-                               new JProperty("aeadAlgorithm",      response.AEADAlgorithm.ToString()),
-                               new JProperty("cookies",            response.Cookies.Count()),
-                               new JProperty("ntpServers",         new JArray(response.NTPv4ServerNames)),
-                               new JProperty("warnings",           new JArray(response.WarningMessages))
-                           )),
-
-                           new JProperty("offset_ms",      offset?.TotalMilliseconds),
-
-                           new JProperty("ntp",            new JObject(
-                               new JProperty("attempts",           query.Attempts),
-                               new JProperty("roundTrip_ms",       roundTrip?.TotalMilliseconds),
-                               new JProperty("newCookieReceived",  query.NewCookieReceived),
-                               new JProperty("cookiesLeft",        query.RemainingCookiesAfterQuery),
-                               new JProperty("kissOfDeath",        query.KissOfDeath?.ToString())
-                           ))
-
+                           new JProperty("ok",          true),
+                           new JProperty("server",      $"{group.Name}: {String.Join(", ", asked)}"),
+                           new JProperty("at",          TimeProvider.GetUtcNow().ToString("o")),
+                           new JProperty("runtime_ms",  stopwatch.ElapsedMilliseconds),
+                           new JProperty("offset_ms",   verdict.Offset?.TotalMilliseconds),
+                           new JProperty("group",       groupJSON),
+                           new JProperty("servers",     servers)
                        ));
 
             }
             catch (Exception e)
             {
-
                 stopwatch.Stop();
-
-                Log.Error($"NTS: the exchange with {client.Hostname} failed after {stopwatch.ElapsedMilliseconds} ms: {e.Message}", "nts", "test");
-
+                Log.Error($"NTS: asking group '{group.Name}' failed after {stopwatch.ElapsedMilliseconds} ms: {e.Message}", "nts", "test");
                 return Remember(Failed(e.Message));
-
             }
 
 
@@ -847,7 +762,7 @@ namespace cloud.charging.open.EV
 
                 var json = new JObject(
                                new JProperty("ok",      false),
-                               new JProperty("server",  ntsClient.Hostname.ToString()),
+                               new JProperty("server",  timeSources.Name),
                                new JProperty("at",      TimeProvider.GetUtcNow().ToString("o")),
                                new JProperty("error",   Error)
                            );

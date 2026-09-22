@@ -347,6 +347,32 @@ namespace cloud.charging.open.EV
                                                                             ))
                        )),
 
+                       // What the group is actually doing, which is what
+                       // synchronises this vehicle's clock. The single client
+                       // reported above is the one the detailed test configures
+                       // itself from, and its cookie pool is not what a
+                       // synchronisation spends.
+                       new JProperty("timeSources",  new JArray(
+                           timeSources.Bands().SelectMany(band => band).Select(source => {
+
+                               var held = timeEngine.KeyExchanges.TryGetValue(source.Hostname, out var state) ? state : null;
+
+                               return new JObject(
+                                          new JProperty("hostname",       source.Hostname.ToString()),
+                                          new JProperty("priority",       source.Priority),
+                                          new JProperty("enabled",        source.Enabled),
+                                          new JProperty("cookies",        held?.RemainingCookies),
+                                          new JProperty("lastExchange",   held?.LastRefreshed.ToString("o")),
+                                          new JProperty("aeadAlgorithm",  held?.NTSKEResponse?.AEADAlgorithm.ToString())
+                                      );
+
+                           })
+                       )),
+                       new JProperty("group",        new JObject(
+                           new JProperty("name",                 timeSources.Name),
+                           new JProperty("minServers",           timeSources.MinServers),
+                           new JProperty("maxDeviationSeconds",  timeSources.MaxDeviation.TotalSeconds)
+                       )),
                        new JProperty("lastSync",     lastTimeSync),
 
                        new JProperty("limits",       new JObject(
