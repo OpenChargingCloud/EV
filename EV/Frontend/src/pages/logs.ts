@@ -8,11 +8,13 @@ import { formatTime, formatTimestamp, isAtLeast } from '../ui';
 /**
  * Everything that happens inside the vehicle, as it happens.
  *
- * The entries arrive over one Server-Sent Events stream and are appended to
- * the list; the filters work on what is already in the browser, so changing
- * one costs nothing and asks the vehicle for nothing. A list that is scrolled
- * to the bottom follows along; scrolling up stops that, which is what somebody
- * reading an older line wants - and the button at the bottom brings them back.
+ * The entries arrive over one Server-Sent Events stream and go in at the top,
+ * newest first: what just happened is the thing somebody came to this page to
+ * read, and a list that grows downwards makes them chase it. The filters work
+ * on what is already in the browser, so changing one costs nothing and asks
+ * the vehicle for nothing. A list that is scrolled to the top follows along;
+ * scrolling down stops that, which is what somebody reading an older line
+ * wants - and the button below brings them back.
  */
 export const logsPage: Page = {
 
@@ -67,7 +69,7 @@ export const logsPage: Page = {
 
             <div class="log-foot small muted">
                 <span id="counts"></span>
-                <button type="button" id="to-bottom" class="btn small" hidden>Jump to the newest</button>
+                <button type="button" id="to-newest" class="btn small" hidden>Jump to the newest</button>
             </div>
 
         `);
@@ -78,7 +80,7 @@ export const logsPage: Page = {
         const errorNote   = must<HTMLElement>       (content, '#log-error');
         const tagBox      = must<HTMLElement>       (content, '#tags');
         const counts      = must<HTMLElement>       (content, '#counts');
-        const toBottom    = must<HTMLButtonElement> (content, '#to-bottom');
+        const toNewest    = must<HTMLButtonElement> (content, '#to-newest');
         const search      = must<HTMLInputElement>  (content, '#search');
         const level       = must<HTMLSelectElement> (content, '#level');
         const follow      = must<HTMLInputElement>  (content, '#follow');
@@ -139,15 +141,16 @@ export const logsPage: Page = {
                    `</div>`;
         }
 
-        function atBottom(): boolean {
-            // A few pixels of slack: a list that is one rounding error short
-            // of the bottom is, to the person reading it, at the bottom.
-            return list.scrollTop + list.clientHeight >= list.scrollHeight - 24;
+        function atNewest(): boolean {
+            // The newest line is at the top now, so this is the top. A few
+            // pixels of slack: a list that is one rounding error short of it
+            // is, to the person reading it, there.
+            return list.scrollTop <= 24;
         }
 
-        function scrollToBottom(): void {
-            list.scrollTop = list.scrollHeight;
-            toBottom.hidden = true;
+        function scrollToNewest(): void {
+            list.scrollTop  = 0;
+            toNewest.hidden = true;
         }
 
         /**
@@ -159,12 +162,16 @@ export const logsPage: Page = {
          */
         function redraw(): void {
 
-            lineBox.innerHTML = logs.entries.map(lineHTML).join('');
+            // The store keeps its entries oldest first, because that is the
+            // order they happened in and the order the vehicle serves them.
+            // The list shows them the other way round, and that difference is
+            // confined to these two lines and to the index arithmetic below.
+            lineBox.innerHTML = logs.entries.map(lineHTML).reverse().join('');
 
             applyFilters();
 
             if (follow.checked)
-                scrollToBottom();
+                scrollToNewest();
 
             drawTags();
 
@@ -187,12 +194,17 @@ export const logsPage: Page = {
 
             const lines = lineBox.children;
             const many  = Math.min(lines.length, logs.entries.length);
+            const last  = logs.entries.length - 1;
 
             shown = 0;
 
             for (let index = 0; index < many; index++) {
 
-                const wanted = matches(logs.entries[index]!);
+                // Line 0 is the newest, and the newest entry is the last one
+                // the store holds. Both lists are anchored at the newest end,
+                // which is what keeps this sound even while the older end of
+                // one of them is being trimmed.
+                const wanted = matches(logs.entries[last - index]!);
 
                 lines[index]!.classList.toggle('filtered-out', !wanted);
 
@@ -212,34 +224,39 @@ export const logsPage: Page = {
 
             if (added.length > 0) {
 
-                const stick = follow.checked && atBottom();
+                const stick = follow.checked && atNewest();
 
-                lineBox.insertAdjacentHTML('beforeend', added.map(lineHTML).join(''));
+                // "added" arrives oldest first. Reversing it before it goes in
+                // at the top is what puts the newest of the batch at the very
+                // top rather than buried under the rest of its own batch.
+                lineBox.insertAdjacentHTML('afterbegin', added.map(lineHTML).reverse().join(''));
 
                 // The vehicle keeps a bounded log and so does this page; what
-                // fell out of the store has to leave the list as well. The
-                // lines and the entries are kept in step, oldest first, which
-                // is what lets a filter be applied by position above.
+                // fell out of the store has to leave the list as well. What
+                // falls out is the oldest, which is the bottom of the list now.
                 while (lineBox.childElementCount > logs.entries.length) {
 
-                    if (lineBox.firstElementChild?.classList.contains('filtered-out') === false)
+                    if (lineBox.lastElementChild?.classList.contains('filtered-out') === false)
                         shown--;
 
-                    lineBox.firstElementChild?.remove();
+                    lineBox.lastElementChild?.remove();
 
                 }
 
                 // Only the new lines are asked about. Asking the whole list
                 // again would put the cost of a filter change on every single
                 // line the vehicle writes.
-                const first = lineBox.childElementCount - added.length;
-                let   any   = false;
+                //
+                // They are the first lines of the list, in the reverse of the
+                // order they arrived in: the oldest of the batch is the last
+                // of them.
+                let any = false;
 
                 added.forEach((entry, index) => {
 
                     const wanted = matches(entry);
 
-                    lineBox.children[first + index]?.classList.toggle('filtered-out', !wanted);
+                    lineBox.children[added.length - 1 - index]?.classList.toggle('filtered-out', !wanted);
 
                     if (wanted) {
                         shown++;
@@ -253,9 +270,9 @@ export const logsPage: Page = {
                 if (any) {
 
                     if (stick)
-                        scrollToBottom();
+                        scrollToNewest();
                     else
-                        toBottom.hidden = false;
+                        toNewest.hidden = false;
 
                 }
 
@@ -326,13 +343,13 @@ export const logsPage: Page = {
 
         search  .addEventListener('input',  () => applyFilters());
         level   .addEventListener('change', () => applyFilters());
-        follow  .addEventListener('change', () => { if (follow.checked) scrollToBottom(); });
-        toBottom.addEventListener('click',  () => scrollToBottom());
+        follow  .addEventListener('change', () => { if (follow.checked) scrollToNewest(); });
+        toNewest.addEventListener('click',  () => scrollToNewest());
         clear   .addEventListener('click',  () => logs.clear());
 
         list.addEventListener('scroll', () => {
-            if (atBottom())
-                toBottom.hidden = true;
+            if (atNewest())
+                toNewest.hidden = true;
         });
 
         const stopListening = logs.onChange(event => {
