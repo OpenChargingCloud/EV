@@ -238,6 +238,140 @@ namespace cloud.charging.open.EV.Tests
 
         #endregion
 
+        #region ASaveOfPartOfTheSectionLeavesTheRestInEffect()
+
+        /// <summary>
+        /// The switch on the page sends "enabled" and nothing else, and the
+        /// rest of what the file said stays in effect.
+        /// </summary>
+        /// <remarks>
+        /// It used to be replaced by what was sent: how often to check and who
+        /// stands behind the time went back to their defaults, and came back
+        /// only when the next start read the file again.
+        /// </remarks>
+        [Test]
+        public async Task ASaveOfPartOfTheSectionLeavesTheRestInEffect()
+        {
+
+            await using var vehicle = Vehicle("""{ "nts": { "checkEverySeconds": 600, "legalTimeAuthority": "PTB" } }""");
+
+            Assert.That(vehicle.TryUpdateNTSConfiguration(JObject.Parse("""{ "enabled": true }"""), out var error),  Is.True,  error);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(vehicle.TimeCheckEvery,      Is.EqualTo(TimeSpan.FromSeconds(600)),  "the interval went back to its default");
+                Assert.That(vehicle.LegalTimeAuthority,  Is.EqualTo("PTB"),                      "the authority was forgotten");
+            });
+
+        }
+
+        #endregion
+
+        #region AListShorterThanTheQuorumIsRefusedAndNotWritten()
+
+        /// <summary>
+        /// A server deleted or switched off below the quorum the file holds is
+        /// refused, and the file is left as it was.
+        /// </summary>
+        /// <remarks>
+        /// Each half was fine on its own - the quorum in the file, the list that
+        /// was sent - and merged they made a section the next start refuses. A
+        /// save that is accepted and then stops the vehicle is the one thing
+        /// worse than a save that is refused.
+        /// </remarks>
+        [Test]
+        public async Task AListShorterThanTheQuorumIsRefusedAndNotWritten()
+        {
+
+            await using var vehicle = Vehicle("""
+                                          { "nts": { "servers": [ "a.example", "b.example", "c.example" ], "minServers": 3 } }
+                                          """);
+
+            var before = File.ReadAllText(ConfigurationPath);
+
+            Assert.Multiple(() =>
+            {
+
+                Assert.That(vehicle.TryUpdateNTSConfiguration(JObject.Parse("""{ "servers": [ "a.example", "b.example" ] }"""), out var deleted),
+                            Is.False,
+                            "a server was deleted below the quorum");
+
+                Assert.That(deleted,  Does.Contain("minServers"));
+
+                Assert.That(vehicle.TryUpdateNTSConfiguration(JObject.Parse("""
+                                { "servers": [ "a.example", "b.example", { "hostname": "c.example", "enabled": false } ] }
+                                """), out _),
+                            Is.False,
+                            "a server was switched off below the quorum");
+
+                Assert.That(File.ReadAllText(ConfigurationPath),         Is.EqualTo(before),  "a refused save was written down");
+                Assert.That(vehicle.TimeSources.Sources.Count(),          Is.EqualTo(3));
+
+            });
+
+        }
+
+        #endregion
+
+        #region EveryServerIsListedWithItsPorts()
+
+        /// <summary>
+        /// The list the page edits and sends back whole has every server in it,
+        /// the switched-off ones included, with the ports each is asked on.
+        /// </summary>
+        /// <remarks>
+        /// It used to list the bands, which have only the servers switched on:
+        /// a page sending back what it was shown would have deleted every
+        /// server that was switched off.
+        /// </remarks>
+        [Test]
+        public async Task EveryServerIsListedWithItsPorts()
+        {
+
+            await using var vehicle = Vehicle("""
+                                          { "nts": { "servers": [ "a.example",
+                                                                  { "hostname": "b.example", "ntsKEPort": 4461, "enabled": false } ] } }
+                                          """);
+
+            var listed = vehicle.NTSConfigurationJSON()["timeSources"] as JArray;
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(listed,                                      Has.Count.EqualTo(2),  "the switched-off server is missing");
+                Assert.That(listed?[1]?.Value<String>("hostname"),       Is.EqualTo("b.example."));
+                Assert.That(listed?[1]?.Value<Boolean>("enabled"),       Is.False);
+                Assert.That(listed?[1]?.Value<Int32>("ntsKEPort"),       Is.EqualTo(4461));
+                Assert.That(listed?[0]?.Value<Int32>("ntpPort"),         Is.EqualTo(123));
+            });
+
+        }
+
+        #endregion
+
+        #region TheQuorumWantedAndTheQuorumHeldAreBothShown()
+
+        /// <summary>
+        /// A lone hostname holds the group to one, and the page shows both that
+        /// and the two that is wanted, which the next list is held to.
+        /// </summary>
+        [Test]
+        public async Task TheQuorumWantedAndTheQuorumHeldAreBothShown()
+        {
+
+            await using var vehicle = Vehicle("""{ "nts": { "hostname": "a.example" } }""");
+
+            var shown = vehicle.NTSConfigurationJSON();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(shown["settings"]?.Value<Int32>("minServers"),  Is.EqualTo(2),  "the quorum wanted");
+                Assert.That(shown["group"]?.   Value<Int32>("minServers"),  Is.EqualTo(1),  "the quorum one server can be held to");
+            });
+
+        }
+
+        #endregion
+
         #region ADeviationStaysWhenTheServersChange()
 
         /// <summary>
