@@ -151,7 +151,7 @@ Every key of the section, and what it is when absent:
 |---|---|---|
 | `enabled` | `true` | whether to ask at all |
 | `servers` | the four above | a list, see below |
-| `minServers` | `2` | how many must answer for the group to have a time |
+| `minServers` | `2`, or all of them when fewer | how many must answer for the group to have a time |
 | `maxDeviationSeconds` | `60` | how far apart they may be before it is written down |
 | `hostname` | - | one server instead of a list |
 | `ntsKEPort`, `ntpPort` | `4460`, `123` | for that one server |
@@ -174,11 +174,17 @@ not true.
 
 A section naming a single `hostname` and no list becomes a group of one, which
 is what every file written before there were groups says, and it keeps working.
+A group of one is held to a quorum of one, and a section asking two of it is
+refused.
 
 A section that is absent is not a section set to nothing: it means the file has
 no opinion, and what the constructor was handed stands. The same holds key by
 key - a section mentioning nothing but `enabled` leaves the servers alone
-rather than quietly reducing four to one.
+rather than quietly reducing four to one, and one mentioning nothing but
+`minServers` or `maxDeviationSeconds` holds the servers the vehicle already
+has to it. A quorum those servers could never reach is refused: at the start,
+before anything is asked, and over the API, before anything is written into
+the file.
 
 The whole group is asked on that interval - authenticated, and without stepping
 the vehicle's own clock - and what it reports is what the servers that answered
