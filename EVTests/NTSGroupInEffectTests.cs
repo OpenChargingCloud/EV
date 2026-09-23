@@ -475,6 +475,74 @@ namespace cloud.charging.open.EV.Tests
 
         #endregion
 
+        #region TheClockIsCheckedAgainstTheGroupAndNotTheTestClient()
+
+        /// <summary>
+        /// Against whom the clock is checked, as its JSON says it: the group,
+        /// its servers switched on in the order they are asked, and how many of
+        /// them have to answer.
+        /// </summary>
+        /// <remarks>
+        /// It used to say "server", with the host of the single client that is
+        /// only there for a server's detailed test - one name, the default, for
+        /// a check that asks whatever group the file names.
+        /// </remarks>
+        [Test]
+        public async Task TheClockIsCheckedAgainstTheGroupAndNotTheTestClient()
+        {
+
+            await using var vehicle = Vehicle("""
+                                          { "nts": { "servers": [ { "hostname": "b.example", "priority": 5 },
+                                                                  "a.example",
+                                                                  { "hostname": "c.example", "enabled": false } ] } }
+                                          """);
+
+            var nts = (JObject) vehicle.ClockJSON()["nts"]!;
+
+            Assert.Multiple(() =>
+            {
+
+                Assert.That(nts.Value<String>("group"),        Is.EqualTo("legal"));
+
+                Assert.That(nts["servers"]!.Values<String>(),  Is.EqualTo(new[] { "a.example", "b.example" }),
+                            "switched on, in the order their bands are asked, and without the root's dot");
+
+                Assert.That(nts.Value<Int32>("minServers"),    Is.EqualTo(2));
+
+                Assert.That(nts.ContainsKey("server"),         Is.False,  "the test client's host is named again");
+
+            });
+
+        }
+
+        #endregion
+
+        #region AClockThatIsNotCheckedNamesNobody()
+
+        /// <summary>
+        /// Switched off, the clock is checked against nobody, and says so -
+        /// rather than naming servers that are not asked.
+        /// </summary>
+        [Test]
+        public async Task AClockThatIsNotCheckedNamesNobody()
+        {
+
+            await using var vehicle = Vehicle("""{ "nts": { "enabled": false } }""");
+
+            var nts = (JObject) vehicle.ClockJSON()["nts"]!;
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(nts.Value<Boolean>("enabled"),  Is.False);
+                Assert.That(nts["group"]?.     Type,        Is.EqualTo(JTokenType.Null));
+                Assert.That(nts["servers"]?.   Type,        Is.EqualTo(JTokenType.Null));
+                Assert.That(nts["minServers"]?.Type,        Is.EqualTo(JTokenType.Null));
+            });
+
+        }
+
+        #endregion
+
     }
 
 }

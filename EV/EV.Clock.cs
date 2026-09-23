@@ -129,10 +129,7 @@ namespace cloud.charging.open.EV
             // groups arrived, so naming one server described neither what was
             // asked nor what had to answer - and did it in the one line
             // somebody reads to find out.
-            // Trimmed, because this is a sentence somebody reads. The root
-            // dot belongs on a name going back into a file and not in the
-            // middle of a line of prose, where it reads as a typing mistake.
-            var asking = timeSources.Bands().SelectMany(band => band).Select(source => source.Hostname.Trimmed).ToArray();
+            var asking = CheckedAgainst();
 
             Log.Info(
                 $"The clock of this vehicle will be checked against {String.Join(", ", asking)} every {TimeCheckEvery.TotalMinutes:F0} minute(s)" +
@@ -181,6 +178,24 @@ namespace cloud.charging.open.EV
 
         #endregion
 
+        #region (private) CheckedAgainst()
+
+        /// <summary>
+        /// The time servers the clock check asks: those switched on, in the
+        /// order their bands are asked in.
+        /// </summary>
+        /// <remarks>
+        /// Trimmed, because both places this goes are read by somebody: a
+        /// sentence in the log, and the clock's JSON for a screen. The root dot
+        /// belongs on a name going back into a file, not in the middle of
+        /// prose, where it reads as a typing mistake.
+        /// </remarks>
+        private String[] CheckedAgainst()
+
+            => [.. timeSources.Bands().SelectMany(band => band).Select(source => source.Hostname.Trimmed)];
+
+        #endregion
+
         #region ClockJSON()
 
         /// <summary>
@@ -219,9 +234,16 @@ namespace cloud.charging.open.EV
                        // clock, and the check below did not set it.
                        new JProperty("source",          "system"),
 
+                       // Against whom: the group the check asks, as the log line
+                       // at the start names it. This used to be "server", with
+                       // the host of the single client that is only there for a
+                       // server's detailed test - one name for a check that has
+                       // asked the whole group since there were groups.
                        new JProperty("nts",             new JObject(
                            new JProperty("enabled",       NTSEnabled),
-                           new JProperty("server",        NTSEnabled ? ntsClient.Hostname.ToString() : null),
+                           new JProperty("group",         NTSEnabled ? timeSources.Name : null),
+                           new JProperty("servers",       NTSEnabled ? new JArray(CheckedAgainst()) : null),
+                           new JProperty("minServers",    NTSEnabled ? timeSources.MinServers : null),
                            new JProperty("lastServer",    lastTimeCheckServer),
                            new JProperty("checkedAt",     checkedAt?.ToString("o")),
                            new JProperty("ageSeconds",    age.HasValue ? Math.Round(age.Value.TotalSeconds, 1) : null),
