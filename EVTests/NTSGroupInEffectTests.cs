@@ -407,6 +407,49 @@ namespace cloud.charging.open.EV.Tests
 
         #endregion
 
+        #region TheOverviewNamesTheGroupAndNotTheTestClient()
+
+        /// <summary>
+        /// The Configuration page's time card names the servers the clock is
+        /// set by - all of them, the one switched off as well - and not the
+        /// host of the single client the detailed test starts from.
+        /// </summary>
+        /// <remarks>
+        /// It led with "NTS: ptbtime1.ptb.de." above the servers switched on:
+        /// one server, which was the test's, above the group that was asked.
+        /// The NTS answer carried the same client as "server", "cookies" and
+        /// "keyExchange", and does not any more either.
+        /// </remarks>
+        [Test]
+        public async Task TheOverviewNamesTheGroupAndNotTheTestClient()
+        {
+
+            await using var vehicle = Vehicle("""
+                                          { "nts": { "servers": [ "a.example",
+                                                                  { "hostname": "b.example", "priority": 5 },
+                                                                  { "hostname": "c.example", "enabled": false } ] } }
+                                          """);
+
+            var time  = vehicle.ConfigurationJSON()["time"] as JObject;
+            var nts   = vehicle.NTSConfigurationJSON();
+
+            Assert.Multiple(() =>
+            {
+
+                Assert.That(time?.Value<String>("timeServers"),  Is.EqualTo("a.example, b.example (priority 5), c.example (switched off)"));
+                Assert.That(time?.Value<Boolean>("ntsEnabled"),  Is.True);
+                Assert.That(time?.ContainsKey("nts"),            Is.False,  "the test client's host is named again");
+
+                Assert.That(nts.ContainsKey("server"),           Is.False);
+                Assert.That(nts.ContainsKey("cookies"),          Is.False);
+                Assert.That(nts.ContainsKey("keyExchange"),      Is.False);
+
+            });
+
+        }
+
+        #endregion
+
         #region ADeviationStaysWhenTheServersChange()
 
         /// <summary>

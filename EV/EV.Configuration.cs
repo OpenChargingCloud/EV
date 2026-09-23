@@ -293,23 +293,21 @@ namespace cloud.charging.open.EV
         /// Where this vehicle gets the time from, and how the key exchange
         /// behind it is doing.
         /// </summary>
+        /// <remarks>
+        /// The group, and nothing about the single client the detailed test
+        /// starts from. This answer used to carry that client's host, its
+        /// cookie pool and its last key exchange as "server", "cookies" and
+        /// "keyExchange" - which read as the vehicle's time server and the
+        /// cookies it synchronises with, and were neither: the group asks its
+        /// servers with key exchanges of its own, one per server, and those
+        /// are what each server's entry below reports.
+        /// </remarks>
         public JObject NTSConfigurationJSON()
         {
-
-            var pool = ntsClient.CookiePoolDiagnostics;
-            var last = ntsClient.LastNTSKEResponse;
 
             return new JObject(
 
                        new JProperty("enabled",      NTSEnabled),
-
-                       new JProperty("server",       new JObject(
-                           new JProperty("hostname",              ntsClient.Hostname.ToString()),
-                           new JProperty("ntsKEPort",             ntsClient.NTSKE_Port.ToUInt16()),
-                           new JProperty("ntpPort",               ntsClient.NTP_Port.  ToUInt16()),
-                           new JProperty("ipVersionPreference",   ntsClient.IPVersionPreference.ToString()),
-                           new JProperty("clientId",              ntsClient.Id)
-                       )),
 
                        // What may be changed about the group and the test, as
                        // it is in effect. The quorum is the one this vehicle
@@ -322,19 +320,8 @@ namespace cloud.charging.open.EV
                            new JProperty("maxDeviationSeconds",   timeSources.MaxDeviation.TotalSeconds)
                        )),
 
-                       new JProperty("cookies",      new JObject(
-                           new JProperty("available",             pool.AvailableCookieCount),
-                           new JProperty("maxPoolSize",           pool.MaxCookiePoolSize),
-                           new JProperty("lowWatermark",          pool.LowWatermark),
-                           new JProperty("seeded",                pool.SeededCookieCount),
-                           new JProperty("received",              pool.CookiesReceived),
-                           new JProperty("consumed",              pool.CookiesConsumed),
-                           new JProperty("dropped",               pool.DroppedCookieCount),
-                           new JProperty("isLow",                 pool.IsLow),
-                           new JProperty("isEmpty",               pool.IsEmpty),
-                           new JProperty("isFull",                pool.IsFull)
-                       )),
-
+                       // What any new client starts with, the group's and the
+                       // test's alike.
                        new JProperty("policy",       new JObject(
                            new JProperty("targetCookieCount",             ntsClient.CookiePoolPolicy.TargetCookieCount),
                            new JProperty("maxPlaceholders",               ntsClient.CookiePoolPolicy.MaxPlaceholders),
@@ -342,23 +329,9 @@ namespace cloud.charging.open.EV
                            new JProperty("minimumRenegotiationInterval",  ntsClient.CookiePoolPolicy.MinimumRenegotiationInterval.ToString())
                        )),
 
-                       new JProperty("keyExchange",  new JObject(
-                           new JProperty("automatic",                 ntsClient.AutomaticKeyExchanges),
-                           new JProperty("aeadAlgorithms",            new JArray(ntsClient.OfferedAEADAlgorithms.Select(algorithm => algorithm.ToString()))),
-                           new JProperty("compliantExporterContext",  ntsClient.CompliantAES128GCMSIVExporterContext),
-                           new JProperty("lastExchange",              last is null
-                                                                          ? null
-                                                                          : new JObject(
-                                                                                new JProperty("error",     last.ErrorMessage),
-                                                                                new JProperty("warnings",  new JArray(last.WarningMessages)),
-                                                                                new JProperty("servers",   new JArray(last.NTPv4ServerNames))
-                                                                            ))
-                       )),
-
                        // What the group is actually doing, which is what
-                       // synchronises this vehicle's clock. The single client
-                       // reported above is the one the detailed test configures
-                       // itself from, and its cookie pool is not what a
+                       // synchronises this vehicle's clock: each server's key
+                       // exchange and the cookies left from it are what a
                        // synchronisation spends.
                        //
                        // Every server, in the order they were configured, the

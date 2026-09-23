@@ -268,8 +268,6 @@ export interface NTSConfiguration {
     timeSources?:  NTSTimeSource[];
     group?:        { name: string; minServers: number; maxDeviationSeconds: number };
 
-    server:    { hostname: string; ntsKEPort: number; ntpPort: number } & Record<string, unknown>;
-
     /**
      * What may be changed about the group and the test. The quorum is the one
      * wanted; the group's own can be lower while it has fewer servers on.
@@ -280,25 +278,8 @@ export interface NTSConfiguration {
         minServers:           number;
         maxDeviationSeconds:  number;
     };
-    cookies: {
-        available:     number;
-        maxPoolSize:   number;
-        lowWatermark:  number;
-        seeded:        number;
-        received:      number;
-        consumed:      number;
-        dropped:       number;
-        isLow:         boolean;
-        isEmpty:       boolean;
-        isFull:        boolean;
-    };
-    policy:  Record<string, unknown>;
-    keyExchange: {
-        automatic:                 number;
-        aeadAlgorithms:            string[];
-        compliantExporterContext:  boolean;
-        lastExchange:              { error: string | null; warnings: string[]; servers: string[] } | null;
-    };
+    /** What any new client starts with, the group's and the test's alike. */
+    policy:    Record<string, unknown>;
     lastSync:  NTSSyncResult | null;
     limits:    {
         maxTimeout:        number;
