@@ -31,14 +31,18 @@ const theClientsOwnTimeout = 3;
  * with a Test of its own and an Edit, the group is added to at the end of its
  * list, and what the group is held to is a form of its own below it.
  *
+ * The cards stand one under the other, read from the top down: whether, who,
+ * by which rules - and last "Sync now", which puts all of that to work, with
+ * what came of it.
+ *
  * Every change takes effect at once, and the vehicle is told the whole list
  * each time - which is why the list is only ever changed by exactly one server
  * at a time, from a dialog, and why a change the vehicle refuses leaves the
  * page as it was.
  *
- * The parts are drawn separately. "Sync now" and a server saved redraw the
- * list and nothing else, so that what somebody was typing into the group's
- * policy is still there when the answer arrives.
+ * The parts are drawn separately. "Sync now" redraws its own card and the
+ * list, and a server saved the list, and nothing else - so that what somebody
+ * was typing into the group's policy is still there when the answer arrives.
  */
 export const ntsPage: Page = {
 
@@ -102,11 +106,11 @@ export const ntsPage: Page = {
                     </div>
                 `}
 
-                <div class="cards">
+                <div class="cards stacked">
 
                     <section class="card" id="nts-switch"></section>
 
-                    <section class="card wide" id="nts-servers"></section>
+                    <section class="card" id="nts-servers"></section>
 
                     <section class="card" id="nts-policy"></section>
 
@@ -126,6 +130,8 @@ export const ntsPage: Page = {
                         </div>
                     </section>
 
+                    <section class="card" id="nts-sync"></section>
+
                 </div>
 
             `);
@@ -133,6 +139,7 @@ export const ntsPage: Page = {
             drawSwitch();
             drawServers();
             drawPolicy();
+            drawSync();
 
             wire();
 
@@ -167,41 +174,29 @@ export const ntsPage: Page = {
         }
 
 
-        /** The time servers, the button that asks them all, and what they said. */
+        /**
+         * The synchronisation this page shows: the one just asked for, or the
+         * last one the vehicle remembers - and none at all while the next one
+         * is being asked for, neither the verdict nor what each server said.
+         * Left standing under the spinning button, the last one read as the
+         * new answer.
+         */
+        function shownSync(): NTSSyncResult | null {
+            return syncing ? null : current?.result ?? current?.lastSync ?? null;
+        }
+
+
+        /** The time servers, and what each of them said. */
         function drawServers(): void {
 
             const configuration = current!;
             const sources       = configuration.timeSources ?? [];
-
-            // Nothing of the last synchronisation while the next one is being
-            // asked for - neither the verdict nor what each server said. Left
-            // standing under the spinning button, it read as the new answer.
-            const sync          = syncing ? null : configuration.result ?? configuration.lastSync ?? null;
+            const sync          = shownSync();
             const switchedOn    = sources.filter(source => source.enabled).length;
 
             render(must<HTMLElement>(content, '#nts-servers'), html`
 
                 <h2><i class="fa-solid fa-users"></i> Time servers</h2>
-
-                <div class="sync-bar">
-                    <button type="button" id="sync" class="btn primary large" ${mayTest && !syncing ? '' : html`disabled`}>
-                        <i class="fa-solid fa-rotate ${syncing ? 'fa-spin' : ''}"></i>
-                        ${syncing ? 'Asking the servers ...' : 'Sync now'}
-                    </button>
-                    <span class="hint">
-                        ${mayTest
-                              ? html`
-                                    Asks every server that is switched on, the way the clock check does: a key
-                                    exchange over TLS, then one authenticated NTP request each. Every step goes
-                                    into the log. The clock of this vehicle is not stepped by it.
-                                `
-                              : html`Asking the servers needs the driver, the service or the system administrator role.`}
-                    </span>
-                </div>
-
-                <span id="sync-error" class="form-error" role="alert"></span>
-
-                ${sync === null ? '' : verdictView(sync)}
 
                 <div class="time-server-list">
                     ${sources.length === 0
@@ -291,6 +286,45 @@ export const ntsPage: Page = {
 
 
         /**
+         * The button that asks all the servers, and what the group concluded.
+         *
+         * A card of its own at the end of the page, below everything it puts
+         * to work: the servers, and the rules they are held to.
+         */
+        function drawSync(): void {
+
+            const sync = shownSync();
+
+            render(must<HTMLElement>(content, '#nts-sync'), html`
+
+                <h2><i class="fa-solid fa-rotate"></i> Synchronisation</h2>
+
+                <div class="sync-bar">
+                    <button type="button" id="sync" class="btn primary large" ${mayTest && !syncing ? '' : html`disabled`}>
+                        <i class="fa-solid fa-rotate ${syncing ? 'fa-spin' : ''}"></i>
+                        ${syncing ? 'Asking the servers ...' : 'Sync now'}
+                    </button>
+                    <span class="hint">
+                        ${mayTest
+                              ? html`
+                                    Asks every server that is switched on, the way the clock check does: a key
+                                    exchange over TLS, then one authenticated NTP request each. Every step goes
+                                    into the log. The clock of this vehicle is not stepped by it.
+                                `
+                              : html`Asking the servers needs the driver, the service or the system administrator role.`}
+                    </span>
+                </div>
+
+                <span id="sync-error" class="form-error" role="alert"></span>
+
+                ${sync === null ? '' : verdictView(sync)}
+
+            `);
+
+        }
+
+
+        /**
          * One time server: who it is, what it said last, and what can be done
          * with it.
          *
@@ -353,7 +387,7 @@ export const ntsPage: Page = {
         }
 
 
-        /** What the group concluded, in one line above the servers it concluded it from. */
+        /** What the group concluded, in one line under the button that asked. */
         function verdictView(sync: NTSSyncResult): HTMLFragment {
 
             const group = sync.group;
@@ -665,10 +699,7 @@ export const ntsPage: Page = {
                 if (button === null || button.disabled)
                     return;
 
-                if (button.id === 'sync')
-                    void runSync();
-
-                else if (button.id === 'add-server')
+                if (button.id === 'add-server')
                     editServer(null);
 
                 else if (button.dataset.edit !== undefined)
@@ -682,6 +713,15 @@ export const ntsPage: Page = {
                         void testServer(readable(source.hostname));
 
                 }
+
+            });
+
+            must<HTMLElement>(content, '#nts-sync').addEventListener('click', event => {
+
+                const button = (event.target as HTMLElement).closest<HTMLButtonElement>('#sync');
+
+                if (button !== null && !button.disabled)
+                    void runSync();
 
             });
 
@@ -765,7 +805,10 @@ export const ntsPage: Page = {
 
         async function runSync(): Promise<void> {
 
+            // Its own card for the button and the verdict, and the list for
+            // what each server said.
             syncing = true;
+            drawSync();
             drawServers();
 
             try
@@ -778,12 +821,14 @@ export const ntsPage: Page = {
             catch (problem)
             {
                 syncing = false;
+                drawSync();
                 drawServers();
                 must<HTMLElement>(content, '#sync-error').textContent = errorMessage(problem);
                 return;
             }
 
             syncing = false;
+            drawSync();
             drawServers();
 
         }
