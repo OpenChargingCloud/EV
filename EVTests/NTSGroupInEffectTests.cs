@@ -440,6 +440,11 @@ namespace cloud.charging.open.EV.Tests
                 Assert.That(time?.Value<Boolean>("ntsEnabled"),  Is.True);
                 Assert.That(time?.ContainsKey("nts"),            Is.False,  "the test client's host is named again");
 
+                // There and empty while nothing has been synchronised, so that
+                // the card says "-" rather than leaving the line out.
+                Assert.That(time?["lastSync"]?.      Type,       Is.EqualTo(JTokenType.Null));
+                Assert.That(time?["lastSyncResult"]?.Type,       Is.EqualTo(JTokenType.Null));
+
                 Assert.That(nts.ContainsKey("server"),           Is.False);
                 Assert.That(nts.ContainsKey("cookies"),          Is.False);
                 Assert.That(nts.ContainsKey("keyExchange"),      Is.False);
