@@ -6,8 +6,9 @@ through.
 
 This is the library. The program that starts it is
 [EVCLI](https://github.com/OpenChargingCloud/EVCLI), and the split is the same
-one the charging station makes: the command line is a vocabulary of switches
-and belongs to whoever starts the thing; everything a vehicle *is* lives here.
+one the charging station makes: the command line - the switches it is started
+with, and the commands it can be typed at while it runs - belongs to whoever
+starts the thing; everything a vehicle *is* lives here.
 
 
 ## What is in it
