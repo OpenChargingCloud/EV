@@ -40,6 +40,15 @@ namespace cloud.charging.open.EV.Logging
     /// Nothing is ever deleted. A simulator that quietly threw away the
     /// evidence of the run somebody is asking about would be worse than one
     /// that needs a directory emptied now and then.
+    ///
+    /// A file that cannot be written does not take the vehicle down, and does
+    /// not bury the console under one complaint per entry either. It is said
+    /// once on stderr, every following entry is tried again, and the first one
+    /// that makes it is preceded in the file by a line saying how many are
+    /// missing and since when. A disk that was full for an hour must not cost
+    /// the rest of the run - and a gap the file admits to is one somebody can
+    /// reason about, where a silent one is only found by the person who needed
+    /// what was in it.
     /// </remarks>
     public sealed class FileLog : IDisposable
     {
@@ -54,8 +63,15 @@ namespace cloud.charging.open.EV.Logging
         /// The day the open file belongs to, so that midnight is noticed
         /// without asking the file system anything.
         /// </summary>
-        private DateOnly      openFor;
-        private StreamWriter? writer;
+        private DateOnly         openFor;
+        private StreamWriter?    writer;
+
+        /// <summary>
+        /// Since when entries have not made it into a file, and how many, while
+        /// writing fails; null and zero while it works.
+        /// </summary>
+        private DateTimeOffset?  failingSince;
+        private UInt64           missed;
 
         #endregion
 
@@ -128,7 +144,7 @@ namespace cloud.charging.open.EV.Logging
                     if (writer is null || day != openFor)
                     {
 
-                        writer?.Dispose();
+                        Close();
 
                         openFor      = day;
                         CurrentFile  = Path.Combine(Directory, $"ev-{day:yyyy-MM-dd}.log");
@@ -136,41 +152,123 @@ namespace cloud.charging.open.EV.Logging
 
                     }
 
-                    // The timestamp in full and in UTC, unlike the console's
-                    // local time of day: a file outlives the session that wrote
-                    // it and is read in another time zone often enough.
-                    writer.Write    (Entry.Timestamp.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"));
-                    writer.Write    (' ');
-                    writer.Write    (Entry.LevelName.PadRight(8));
+                    // The gap first, where it happened, and as an entry of its
+                    // own - so that somebody reading from the top meets it
+                    // exactly where the entries stop making sense, and a tool
+                    // reading the file meets nothing it cannot parse.
+                    if (failingSince is DateTimeOffset since)
+                        WriteEntry(writer, new LogEntry(
+                                               0,
+                                               Entry.Timestamp,
+                                               LogLevel.Warning,
+                                               [ "log" ],
+                                               $"{missed} entr{(missed == 1 ? "y" : "ies")} since {Stamp(since)} could not be written here."
+                                           ));
 
-                    if (Entry.Tags.Count > 0)
-                    {
-                        writer.Write('[');
-                        writer.Write(String.Join(" ", Entry.Tags));
-                        writer.Write("] ");
-                    }
-
-                    writer.WriteLine(Entry.Message);
+                    WriteEntry(writer, Entry);
 
                     // Every entry, not every buffer: see the remarks above.
                     writer.Flush();
+
+                    if (failingSince is not null)
+                    {
+
+                        Console.Error.WriteLine($"The log file in '{Directory}' is being written again; " +
+                                                $"{missed} entr{(missed == 1 ? "y is" : "ies are")} missing from it.");
+
+                        failingSince  = null;
+                        missed        = 0;
+
+                    }
 
                 }
                 catch (Exception e)
                 {
 
-                    // A log that takes the vehicle down with it when a disk
-                    // fills up would be the more expensive failure. Said once
-                    // on the console - going through the log would come back
-                    // here and fail again.
-                    Console.Error.WriteLine($"The log file in '{Directory}' could not be written: {e.Message}");
+                    // Once, and on stderr rather than through the log - going
+                    // through the log would come back here and fail again.
+                    if (failingSince is null)
+                    {
 
-                    writer?.Dispose();
-                    writer = null;
+                        Console.Error.WriteLine($"The log file in '{Directory}' could not be written: {e.Message} " +
+                                                "Every following entry is tried again, and the file will say what it missed.");
+
+                        failingSince = Entry.Timestamp;
+
+                    }
+
+                    missed++;
+
+                    Close();
 
                 }
 
             }
+
+        }
+
+        #endregion
+
+        #region (private static) WriteEntry(Writer, Entry)
+
+        /// <summary>
+        /// One entry, on one line.
+        /// </summary>
+        private static void WriteEntry(StreamWriter  Writer,
+                                       LogEntry      Entry)
+        {
+
+            Writer.Write    (Stamp(Entry.Timestamp));
+            Writer.Write    (' ');
+            Writer.Write    (Entry.LevelName.PadRight(8));
+
+            if (Entry.Tags.Count > 0)
+            {
+                Writer.Write('[');
+                Writer.Write(String.Join(" ", Entry.Tags));
+                Writer.Write("] ");
+            }
+
+            Writer.WriteLine(Entry.Message);
+
+        }
+
+        #endregion
+
+        #region (private static) Stamp(Timestamp)
+
+        /// <summary>
+        /// The timestamp in full and in UTC, unlike the console's local time of
+        /// day: a file outlives the session that wrote it, and is read in
+        /// another time zone often enough.
+        /// </summary>
+        private static String Stamp(DateTimeOffset Timestamp)
+
+            => Timestamp.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+
+        #endregion
+
+        #region (private) Close()
+
+        /// <summary>
+        /// Let go of the open file, whatever state it is in.
+        /// </summary>
+        /// <remarks>
+        /// Disposing a writer flushes it first, and on a full disk that throws
+        /// the very error that brought us here a second time. What is lost by
+        /// swallowing it is the same buffer that was lost already.
+        /// </remarks>
+        private void Close()
+        {
+
+            try
+            {
+                writer?.Dispose();
+            }
+            catch
+            { }
+
+            writer = null;
 
         }
 
@@ -188,8 +286,7 @@ namespace cloud.charging.open.EV.Logging
 
             lock (padlock)
             {
-                writer?.Dispose();
-                writer = null;
+                Close();
             }
 
             GC.SuppressFinalize(this);
