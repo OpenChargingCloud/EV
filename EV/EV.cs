@@ -90,6 +90,11 @@ namespace cloud.charging.open.EV
         public const String  DefaultAccountsPath          = "accounts";
 
         /// <summary>
+        /// Where the log files go, unless another directory is given.
+        /// </summary>
+        public const String  DefaultLogPath               = "logs";
+
+        /// <summary>
         /// The accounts themselves, inside that directory.
         /// </summary>
         public const String  DefaultAccountsDatabaseFile  = "users.db";
@@ -240,6 +245,7 @@ namespace cloud.charging.open.EV
         private           SeccEndpoint?                   lastDiscoveryEndpoint;
 
         private readonly  ConsoleLog?                     consoleLog;
+        private readonly  FileLog?                        fileLog;
         private readonly  TraceBridge?                    traceBridge;
 
         private           Boolean                         started;
@@ -468,6 +474,7 @@ namespace cloud.charging.open.EV
         /// <param name="Log">Where everything that happens is written, or null to make a log.</param>
         /// <param name="LogToConsole">Whether the log is also written to the console.</param>
         /// <param name="ConsoleLogLevel">How much of it reaches the console.</param>
+        /// <param name="LogPath">The directory the log files are written to, or null to write none.</param>
         /// <param name="BridgeDebugLog">Whether what the libraries below write with DebugX is picked up.</param>
         /// <param name="TimeProvider">The clock, or null for the system one.</param>
         public EV(IIPAddress?            HTTPHostname      = null,
@@ -485,6 +492,7 @@ namespace cloud.charging.open.EV
                   EventLog?              Log               = null,
                   Boolean                LogToConsole      = true,
                   LogLevel               ConsoleLogLevel   = LogLevel.Info,
+                  String?                LogPath           = null,
                   Boolean                BridgeDebugLog    = true,
                   TimeProvider?          TimeProvider      = null)
         {
@@ -507,6 +515,14 @@ namespace cloud.charging.open.EV
 
             this.consoleLog   = LogToConsole
                                     ? new ConsoleLog(this.Log, ConsoleLogLevel)
+                                    : null;
+
+            // Everything, and not what the console was told to show: a level
+            // is chosen to keep a console readable, and a file nobody is
+            // reading has no such problem. What is left out here cannot be
+            // asked for afterwards.
+            this.fileLog      = LogPath is not null
+                                    ? new FileLog(this.Log, LogPath)
                                     : null;
 
             // Attached before anything else is built, so that what the DNS
@@ -1411,6 +1427,7 @@ namespace cloud.charging.open.EV
 
             traceBridge?.Dispose();
             consoleLog? .Dispose();
+            fileLog?    .Dispose();
 
             sessionLock.    Dispose();
             discoveryLock.  Dispose();
