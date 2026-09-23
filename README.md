@@ -206,7 +206,9 @@ cannot: a server that is wrong rather than absent.
 while a check against a time source **the operator has vouched for** is both
 recent enough and close enough; without a named authority this is an ordinary
 clock that happens to be checked, and the clock's own JSON says so in as many
-words.
+words. `GET /api/v1/clock` serves it to anybody signed in: the time, the group
+it is checked against, when it was last checked and how far off it was then -
+and `legal`, with a `why` when it is not, `notClaimed` among them.
 
 A host name written back into this file carries the root label -
 `ptbtime1.ptb.de.` - because that is the absolute form it was parsed into, and
