@@ -180,13 +180,30 @@ export interface TimeServerTest {
     steps:       TimeServerTestStep[];
 }
 
-/** What may be changed about the time client while the vehicle runs. */
+/**
+ * What may be changed about the time servers while the vehicle runs. What is
+ * left out stays as it is; the list of servers is one value and replaces the
+ * vehicle's whole.
+ */
 export interface NTSUpdate {
-    enabled?:         boolean;
-    hostname?:        string;
-    ntsKEPort?:       number;
-    ntpPort?:         number;
-    timeoutSeconds?:  number;
+    enabled?:              boolean;
+    servers?:              NTSServerEntry[];
+    minServers?:           number;
+    maxDeviationSeconds?:  number;
+    checkEverySeconds?:    number;
+    timeoutSeconds?:       number;
+}
+
+/**
+ * One time server as the configuration names it. Whatever is left out is the
+ * usual: priority 0, the usual ports, switched on.
+ */
+export interface NTSServerEntry {
+    hostname:    string;
+    priority?:   number;
+    ntsKEPort?:  number;
+    ntpPort?:    number;
+    enabled?:    boolean;
 }
 
 /** How one synchronisation went, step by step. */
@@ -200,7 +217,14 @@ export interface NTSSyncResult {
     offset_ms?:   number | null;
 
     /** What the group concluded: the median, how many answered, how far apart. */
-    group?:       Record<string, unknown>;
+    group?:       {
+        name:               string;
+        answered:           number;
+        required:           number;
+        offset_ms:          number | null;
+        spread_ms:          number | null;
+        deviationExceeded:  boolean;
+    };
 
     /** One entry per server asked, answered or not. */
     servers?:     NTSServerResult[];
@@ -221,26 +245,41 @@ export interface NTSServerResult {
     error?:         string | null;
 }
 
-/** Where this vehicle gets the time from, and how its key exchange is doing. */
 /** One server of this vehicle's group, and what its key exchange is doing. */
 export interface NTSTimeSource {
     hostname:       string;
     priority:       number;
+    ntsKEPort:      number;
+    ntpPort:        number;
     enabled:        boolean;
     cookies?:       number | null;
     lastExchange?:  string | null;
     aeadAlgorithm?: string | null;
 }
 
+/** Where this vehicle gets the time from, and how its key exchange is doing. */
 export interface NTSConfiguration {
     enabled:   boolean;
 
-    /** The servers this vehicle asks, and the rules for believing them. */
+    /**
+     * Every server this vehicle has, switched on or not, in the order they
+     * were configured - and the rules for believing them.
+     */
     timeSources?:  NTSTimeSource[];
     group?:        { name: string; minServers: number; maxDeviationSeconds: number };
 
     server:    { hostname: string; ntsKEPort: number; ntpPort: number } & Record<string, unknown>;
-    settings:  { timeoutSeconds: number | null };
+
+    /**
+     * What may be changed about the group and the test. The quorum is the one
+     * wanted; the group's own can be lower while it has fewer servers on.
+     */
+    settings:  {
+        timeoutSeconds:       number | null;
+        checkEverySeconds:    number;
+        minServers:           number;
+        maxDeviationSeconds:  number;
+    };
     cookies: {
         available:     number;
         maxPoolSize:   number;
@@ -261,7 +300,15 @@ export interface NTSConfiguration {
         lastExchange:              { error: string | null; warnings: string[]; servers: string[] } | null;
     };
     lastSync:  NTSSyncResult | null;
-    limits:    { maxTimeout: number };
+    limits:    {
+        maxTimeout:        number;
+        minCheckEvery:     number;
+        maxCheckEvery:     number;
+        minDeviation:      number;
+        maxDeviation:      number;
+        defaultNTSKEPort:  number;
+        defaultNTPPort:    number;
+    };
     file:      string;
     /** Only on the answer to a synchronisation, which carries both. */
     result?:   NTSSyncResult;
@@ -963,23 +1010,23 @@ export const api = {
         get:   ()                    => request<NTSConfiguration>('GET', '/configuration/nts'),
         save:  (update: NTSUpdate)   => request<NTSConfiguration>('PUT', '/configuration/nts', update),
         /**
-         * One key exchange and one authenticated NTP request, with every step
-         * in the log - two steps over the network, so two of the vehicle's own
-         * timeouts before the page stops believing in it.
-         *
-         * @param timeoutSeconds  what the vehicle allows each of the two steps.
-         */
-        /**
          * Ask one time server everything: the name, the key exchange, the
          * authenticated NTP request, each one written down as it happens.
          *
-         * @param host  which server, or undefined for the configured one. The
-         *              key exchange may name others, and each of those can be
-         *              asked in its own right.
+         * @param timeoutSeconds  what the vehicle allows each of the two steps.
+         * @param host            which server, on the ports it is configured
+         *                        with, or undefined for the configured one.
          */
         test:  (timeoutSeconds: number, host?: string) => request<TimeServerTest>(
                                                'POST', '/configuration/nts/test', { host },
                                                afterAsking([timeoutSeconds, timeoutSeconds])),
+        /**
+         * Ask every server of the group, with every step in the log - two steps
+         * over the network per server, so two of the vehicle's own timeouts
+         * before the page stops believing in it.
+         *
+         * @param timeoutSeconds  what the vehicle allows each of the two steps.
+         */
         sync:  (timeoutSeconds: number) => request<NTSConfiguration>(
                                                'POST', '/configuration/nts/sync', {},
                                                afterAsking([timeoutSeconds, timeoutSeconds])
