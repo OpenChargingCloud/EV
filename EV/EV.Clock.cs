@@ -129,7 +129,10 @@ namespace cloud.charging.open.EV
             // groups arrived, so naming one server described neither what was
             // asked nor what had to answer - and did it in the one line
             // somebody reads to find out.
-            var asking = timeSources.Bands().SelectMany(band => band).Select(source => source.Hostname.ToString()).ToArray();
+            // Trimmed, because this is a sentence somebody reads. The root
+            // dot belongs on a name going back into a file and not in the
+            // middle of a line of prose, where it reads as a typing mistake.
+            var asking = timeSources.Bands().SelectMany(band => band).Select(source => source.Hostname.Trimmed).ToArray();
 
             Log.Info(
                 $"The clock of this vehicle will be checked against {String.Join(", ", asking)} every {TimeCheckEvery.TotalMinutes:F0} minute(s)" +
