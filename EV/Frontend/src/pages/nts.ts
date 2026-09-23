@@ -566,6 +566,8 @@ export const ntsPage: Page = {
          * slow can be told from one that is refusing.
          *
          * @param host  which server, asked on the ports it is configured with.
+         *              Sent as it is read, without the root's dot, because the
+         *              vehicle writes it into the log as it was sent.
          */
         async function testServer(host: string): Promise<void> {
 
@@ -673,7 +675,7 @@ export const ntsPage: Page = {
                     const source = current?.timeSources?.[Number(button.dataset.test)];
 
                     if (source !== undefined)
-                        void testServer(source.hostname);
+                        void testServer(readable(source.hostname));
 
                 }
 
