@@ -172,7 +172,11 @@ export const ntsPage: Page = {
 
             const configuration = current!;
             const sources       = configuration.timeSources ?? [];
-            const sync          = configuration.result ?? configuration.lastSync ?? null;
+
+            // Nothing of the last synchronisation while the next one is being
+            // asked for - neither the verdict nor what each server said. Left
+            // standing under the spinning button, it read as the new answer.
+            const sync          = syncing ? null : configuration.result ?? configuration.lastSync ?? null;
             const switchedOn    = sources.filter(source => source.enabled).length;
 
             render(must<HTMLElement>(content, '#nts-servers'), html`

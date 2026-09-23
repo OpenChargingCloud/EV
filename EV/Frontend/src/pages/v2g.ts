@@ -67,7 +67,9 @@ export const v2gPage: Page = {
 
             const configuration = current;
             const settings      = configuration.settings;
-            const found         = configuration.result ?? configuration.lastDiscovery;
+            // Nothing of the last discovery while the next one is running: left
+            // standing under "Asking the link ...", it read as the new answer.
+            const found         = searching ? null : configuration.result ?? configuration.lastDiscovery;
             const candidates    = configuration.interfaces;
 
             render(content, html`
@@ -473,6 +475,9 @@ export const v2gPage: Page = {
 
             must<HTMLElement>(content, '#pair-error').textContent = '';
 
+            // The last pairing's result goes as soon as the next one starts,
+            // as the discovery's does.
+            paired  = null;
             pairing = true;
             draw();
 
