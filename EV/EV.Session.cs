@@ -31,7 +31,8 @@ using cloud.charging.open.protocols.ISO15118.T1S.Transport;
 
 using cloud.charging.open.EV.Configuration;
 using cloud.charging.open.EV.ISO15118;
-using cloud.charging.open.protocols.WWCP.node;
+using cloud.charging.open.protocols.WWCP.Node;
+using cloud.charging.open.protocols.WWCP.Node.Certificates;
 
 #endregion
 

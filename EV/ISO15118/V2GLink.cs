@@ -38,7 +38,7 @@ using cloud.charging.open.EV.Configuration;
 // System.Diagnostics carries an EventLog of its own, and this project's is the
 // one every line below means.
 using Stopwatch = System.Diagnostics.Stopwatch;
-using cloud.charging.open.protocols.WWCP.node.logging;
+using cloud.charging.open.protocols.WWCP.Node.Logging;
 
 #endregion
 

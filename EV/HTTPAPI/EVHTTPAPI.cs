@@ -26,9 +26,11 @@ using Newtonsoft.Json.Linq;
 using org.GraphDefined.Vanaheimr.Illias;
 using org.GraphDefined.Vanaheimr.Hermod.HTTP;
 
-using cloud.charging.open.protocols.WWCP.node.logging;
-using cloud.charging.open.protocols.WWCP.node.Configuration;
-using cloud.charging.open.protocols.WWCP.node;
+using cloud.charging.open.protocols.WWCP.Node.Logging;
+using cloud.charging.open.protocols.WWCP.Node.Web;
+using cloud.charging.open.protocols.WWCP.Node.Certificates;
+using cloud.charging.open.protocols.WWCP.Node.Configuration;
+using cloud.charging.open.protocols.WWCP.Node;
 
 #endregion
 
@@ -57,7 +59,7 @@ namespace cloud.charging.open.EV
         /// <summary>
         /// The default root path of this API.
         /// </summary>
-        public static readonly HTTPPath  DefaultAPIPath      = AWWCPNode.DefaultAPIPath;
+        public static readonly HTTPPath  DefaultAPIPath      = WWCPNode.DefaultAPIPath;
 
         /// <summary>
         /// The identification of the Server-Sent Events source.

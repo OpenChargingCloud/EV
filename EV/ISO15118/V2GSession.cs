@@ -39,7 +39,7 @@ using Stopwatch = System.Diagnostics.Stopwatch;
 
 using Iso2   = cloud.charging.open.protocols.ISO15118_2.Generated;
 using Iso20  = cloud.charging.open.protocols.ISO15118_20.CommonMessages.Generated;
-using cloud.charging.open.protocols.WWCP.node.logging;
+using cloud.charging.open.protocols.WWCP.Node.Logging;
 
 #endregion
 

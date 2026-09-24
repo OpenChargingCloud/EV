@@ -22,7 +22,7 @@ using System.Diagnostics.CodeAnalysis;
 using Newtonsoft.Json.Linq;
 
 using cloud.charging.open.protocols.ISO15118.SDP.Messages;
-using cloud.charging.open.protocols.WWCP.node.Configuration;
+using cloud.charging.open.protocols.WWCP.Node.Configuration;
 
 #endregion
 

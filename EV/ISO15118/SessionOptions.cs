@@ -127,7 +127,7 @@ namespace cloud.charging.open.EV.ISO15118
         /// <remarks>
         /// <para>
         /// Null and "an empty set of roots" are not the same answer and are never conflated - see
-        /// <c>CertificateStore.ValidatorFor</c>. Null means this vehicle was never told what to believe
+        /// <c>EV.ValidatorFor</c>. Null means this vehicle was never told what to believe
         /// about that kind of chain and says so; a validator means it was, and a chain that does not
         /// satisfy it is refused.
         /// </para>

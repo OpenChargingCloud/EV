@@ -27,7 +27,7 @@ using NUnit.Framework;
 using org.GraphDefined.Vanaheimr.Hermod;
 
 using cloud.charging.open.EV.Configuration;
-using cloud.charging.open.protocols.WWCP.node.Configuration;
+using cloud.charging.open.protocols.WWCP.Node.Configuration;
 
 #endregion
 

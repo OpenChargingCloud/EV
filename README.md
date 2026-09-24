@@ -29,7 +29,7 @@ Everything a running vehicle is before it is a vehicle - its log, its
 configuration file, name resolution and the time, the certificate store, who
 may sign in, and the HTTP server all of that sits behind - is not here. That
 is [WWCP_Node](https://github.com/OpenChargingCloud/WWCP_Node), the part every
-one of these programs shares, and `EV` is one `AWWCPNode` with a battery: its
+one of these programs shares, and `EV` is one `WWCPNode` with a battery: its
 sections go into the same configuration file, and its JSON API below the
 node's `/api`.
 

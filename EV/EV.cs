@@ -31,9 +31,10 @@ using cloud.charging.open.protocols.ISO15118.Discovery;
 using cloud.charging.open.EV.Configuration;
 using cloud.charging.open.EV.ISO15118;
 
-using cloud.charging.open.protocols.WWCP.node;
-using cloud.charging.open.protocols.WWCP.node.logging;
-using cloud.charging.open.protocols.WWCP.node.Configuration;
+using cloud.charging.open.protocols.WWCP.Node;
+using cloud.charging.open.protocols.WWCP.Node.Certificates;
+using cloud.charging.open.protocols.WWCP.Node.Logging;
+using cloud.charging.open.protocols.WWCP.Node.Configuration;
 using cloud.charging.open.protocols.ISO15118.Security;
 
 #endregion
@@ -60,7 +61,7 @@ namespace cloud.charging.open.EV
     /// interface that runs for as long as the process does, and an ISO 15118
     /// side that is a set of things it can be asked to do.
     /// </remarks>
-    public partial class EV : AWWCPNode
+    public partial class EV : WWCPNode
     {
 
         #region Data
@@ -69,7 +70,7 @@ namespace cloud.charging.open.EV
         /// The manifest resource prefix of the embedded frontend bundle
         /// (see the EmbedFrontend target of EV.csproj).
         /// </summary>
-        public new const        String  HTTPRoot          = "cloud.charging.open.EV.HTTPRoot.";
+        public const            String  HTTPRoot          = "cloud.charging.open.EV.HTTPRoot.";
 
         /// <summary>
         /// The TCP port the web interface listens on, unless another is given.
@@ -77,9 +78,11 @@ namespace cloud.charging.open.EV
         /// <remarks>
         /// One below the charging station's 2348, so that a vehicle and a
         /// station started on the same bench do not fight over a port - which
-        /// is the normal way of running both of these.
+        /// is the normal way of running both of these. The node below has a
+        /// port of its own for a node of no particular kind, and this one is
+        /// handed to it rather than left to it.
         /// </remarks>
-        public static readonly  IPPort  DefaultHTTPPort   = IPPort.Parse(2347);
+        public static new readonly  IPPort  DefaultHTTPPort   = IPPort.Parse(2347);
 
         /// <summary>
         /// Lets one SDP discovery run at a time.
@@ -204,27 +207,32 @@ namespace cloud.charging.open.EV
                   Boolean                BridgeDebugLog     = true,
                   TimeProvider?          TimeProvider       = null)
 
-            : base("electric vehicle",
-                   "vehicle",
-                   typeof(EV).Assembly.GetName().Version?.ToString(3) ?? "0.0.0",
-                   HTTPPort ?? DefaultHTTPPort,
-                   HTTPHostname,
-                   HTTPServer,
-                   BasePath,
-                   HTTPRootPath,
-                   ExtAPI,
-                   AccountsPath,
-                   ConfigFile,
-                   DNSClient,
-                   NTSClient,
-                   Frontend ?? new EmbeddedContentSource(HTTPRoot, typeof(EV).Assembly),
-                   CertificatesPath,
-                   Log,
-                   LogToConsole,
-                   ConsoleLogLevel,
-                   LogPath,
-                   BridgeDebugLog,
-                   TimeProvider)
+            : base(Kind:              new NodeKind(
+                                          Name:           "electric vehicle",
+                                          Tag:            "vehicle",
+                                          Product:        "EV",
+                                          Organization:   "Vehicle",
+                                          LogFilePrefix:  "ev"
+                                      ),
+                   Version:           typeof(EV).Assembly.GetName().Version?.ToString(3) ?? "0.0.0",
+                   HTTPPort:          HTTPPort ?? DefaultHTTPPort,
+                   HTTPHostname:      HTTPHostname,
+                   HTTPServer:        HTTPServer,
+                   BasePath:          BasePath,
+                   HTTPRootPath:      HTTPRootPath,
+                   ExtAPI:            ExtAPI,
+                   AccountsPath:      AccountsPath,
+                   ConfigFile:        ConfigFile,
+                   DNSClient:         DNSClient,
+                   NTSClient:         NTSClient,
+                   Frontend:          Frontend ?? new EmbeddedContentSource(HTTPRoot, typeof(EV).Assembly),
+                   CertificatesPath:  CertificatesPath,
+                   Log:               Log,
+                   LogToConsole:      LogToConsole,
+                   ConsoleLogLevel:   ConsoleLogLevel,
+                   LogPath:           LogPath,
+                   BridgeDebugLog:    BridgeDebugLog,
+                   TimeProvider:      TimeProvider)
 
         {
 
@@ -273,11 +281,11 @@ namespace cloud.charging.open.EV
             // unknown /api path never reaches the single-page-application
             // stub.
             this.API           = new EVHTTPAPI(
-                                     HTTPServer:  WWCPHTTPServer,
+                                     HTTPServer:  this.HTTPServer,
                                      Vehicle:     this,
                                      ExtAPI:      this.ExtAPI,
                                      Log:         this.Log,
-                                     APIPath:     WWCPHTTPRootPath,
+                                     APIPath:     this.HTTPRootPath,
                                      Version:     Version
                                  );
 
@@ -433,96 +441,47 @@ namespace cloud.charging.open.EV
 
         /// <summary>
         /// What this vehicle is, as the Configuration page of the web
-        /// interface reads it.
+        /// interface reads it: what the node below says of itself, and on top
+        /// the vehicle, its battery, its link and the assemblies it was built
+        /// from.
         /// </summary>
-        /// <remarks>
-        /// Read-only: it answers "what am I running", not "change it". Nothing
-        /// here is a secret - the accounts appear as the path they live at and
-        /// the route to sign in, and never as anything about a password.
-        /// </remarks>
-        public JObject ConfigurationJSON()
+        public override JObject ConfigurationJSON()
+        {
 
-            => new (
+            var json = base.ConfigurationJSON();
 
-                   new JProperty("vehicle",    new JObject(
-                       new JProperty("name",           VehicleName),
-                       new JProperty("vin",            VIN),
-                       new JProperty("version",        Version),
-                       new JProperty("createdAt",      CreatedAt.ToString("o")),
-                       new JProperty("machine",        Environment.MachineName),
-                       new JProperty("runtime",        Environment.Version.ToString()),
-                       new JProperty("os",             Environment.OSVersion.ToString())
-                   )),
+            // First, because it is the card the page leads with.
+            json.AddFirst(new JProperty("vehicle",    new JObject(
+                              new JProperty("name",           VehicleName),
+                              new JProperty("vin",            VIN),
+                              new JProperty("version",        Version),
+                              new JProperty("createdAt",      CreatedAt.ToString("o")),
+                              new JProperty("machine",        Environment.MachineName),
+                              new JProperty("runtime",        Environment.Version.ToString()),
+                              new JProperty("os",             Environment.OSVersion.ToString())
+                          )));
 
-                   new JProperty("battery",    new JObject(
-                       new JProperty("capacityKWh",                BatteryCapacity_kWh),
-                       new JProperty("stateOfChargePercent",       StateOfCharge_percent),
-                       new JProperty("targetStateOfChargePercent", TargetStateOfCharge_percent),
-                       new JProperty("maxChargingPowerKW",         MaxChargingPower_kW),
-                       new JProperty("taperFromPercent",           TaperFrom_percent)
-                   )),
+            json.Property("vehicle")!.AddAfterSelf(new JProperty("battery",    new JObject(
+                              new JProperty("capacityKWh",                BatteryCapacity_kWh),
+                              new JProperty("stateOfChargePercent",       StateOfCharge_percent),
+                              new JProperty("targetStateOfChargePercent", TargetStateOfCharge_percent),
+                              new JProperty("maxChargingPowerKW",         MaxChargingPower_kW),
+                              new JProperty("taperFromPercent",           TaperFrom_percent)
+                          )));
 
-                   new JProperty("http",       new JObject(
-                       new JProperty("serverName",     WWCPHTTPServer.HTTPServerName),
-                       new JProperty("url",            WebInterfaceURL.ToString()),
-                       new JProperty("basePath",       BasePath.ToString()),
-                       new JProperty("apiPath",        WWCPHTTPRootPath.ToString()),
-                       new JProperty("sharedServer",   !OwnsHTTPServer),
-                       new JProperty("running",        started),
-                       new JProperty("frontend",       Frontend.Description),
-                       new JProperty("webInterface",   WebInterface is not null)
-                   )),
+            json.Add(new JProperty("v2g",        new JObject(
+                         new JProperty("interface",      V2GSettings.InterfaceName),
+                         new JProperty("candidates",     new JArray(V2GLink.Candidates().Select(candidate => candidate.Name))),
+                         new JProperty("lastDiscovery",  lastDiscovery)
+                     )));
 
-                   new JProperty("web",        new JObject(
-                       new JProperty("accountsPath",   AccountsPath),
-                       new JProperty("sharedAccounts", !OwnsExtAPI),
-                       new JProperty("signInAt",       $"{ExtAPI.RootPath.ToString().TrimEnd('/')}/login"),
-                       new JProperty("users",          ExtAPI.Users.     Count()),
-                       new JProperty("groups",         ExtAPI.UserGroups.Count()),
-                       new JProperty("cookie",         ExtAPI.SessionCookieName.ToString()),
-                       new JProperty("maxLifetime",    ExtAPI.MaxSignInSessionLifetime.ToString())
-                   )),
+            json.Add(new JProperty("assemblies", new JArray(
+                         BuiltFrom.Assemblies.Select(AssemblyJSON)
+                     )));
 
-                   new JProperty("log",        new JObject(
-                       new JProperty("capacity",       Log.Capacity),
-                       new JProperty("entries",        Log.Count),
-                       new JProperty("lastId",         Log.LastId),
-                       new JProperty("debugBridge",    traceBridge is not null),
-                       new JProperty("console",        consoleLog  is not null),
-                       new JProperty("tags",           new JArray(Log.KnownTags))
-                   )),
+            return json;
 
-                   new JProperty("v2g",        new JObject(
-                       new JProperty("interface",      V2GSettings.InterfaceName),
-                       new JProperty("candidates",     new JArray(V2GLink.Candidates().Select(candidate => candidate.Name))),
-                       new JProperty("lastDiscovery",  lastDiscovery)
-                   )),
-
-                   // The group, which is what sets the clock. This card used to
-                   // lead with "NTS" and the host of the single client the
-                   // detailed test starts from - one server, above the four that
-                   // are actually asked, and with its root dot - and it left out
-                   // every server that was switched off. The servers are now
-                   // named the way the log names them when they change.
-                   //
-                   // And the last synchronisation - the button's, the prompt's
-                   // or the clock check's - when it happened and how it went,
-                   // or nothing while there has been none.
-                   new JProperty("time",       new JObject(
-                       new JProperty("ntsEnabled",      NTSEnabled),
-                       new JProperty("timeServers",     NTSTimeSources.Describe()),
-                       new JProperty("minServers",      NTSTimeSources.MinServers),
-                       new JProperty("checkedEvery",    TimeCheckEvery.ToString()),
-                       new JProperty("lastSync",        lastTimeSync?.Value<String>("at")),
-                       new JProperty("lastSyncResult",  LastSyncSaid(lastTimeSync)),
-                       new JProperty("now",             TimeProvider.GetUtcNow().ToString("o"))
-                   )),
-
-                   new JProperty("assemblies", new JArray(
-                       BuiltFrom.Assemblies.Select(AssemblyJSON)
-                   ))
-
-               );
+        }
 
         #endregion
 
