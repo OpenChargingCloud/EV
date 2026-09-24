@@ -1,5 +1,6 @@
 import { logLevels, type LogEntry, type LogLevel } from '../api/client';
 import { escapeHTML, html, must, render } from '../html';
+import { drawOrder, entryAt } from '../logs/order';
 import { logs } from '../logs/store';
 import type { Page } from '../router';
 import { shell } from '../shell';
@@ -172,8 +173,8 @@ export const logsPage: Page = {
             // The store keeps its entries oldest first, because that is the
             // order they happened in and the order the vehicle serves them.
             // The list shows them the other way round, and that difference is
-            // confined to these two lines and to the index arithmetic below.
-            lineBox.innerHTML = logs.entries.map(lineHTML).reverse().join('');
+            // confined to drawOrder and entryAt in logs/order.ts.
+            lineBox.innerHTML = drawOrder(logs.entries).map(lineHTML).join('');
 
             applyFilters();
 
@@ -187,21 +188,25 @@ export const logsPage: Page = {
         /**
          * Which of the lines already drawn are wanted.
          *
-         * A filter used to rebuild the whole list, which measured 597 ms for
-         * one keystroke in the search box at 1959 entries - a third of a
-         * second of frozen page per character, and it grows with the log. Most
-         * of that was work already done: the same lines built again from the
-         * same entries, and every timestamp put through the locale formatter
-         * a second time.
+         * The charging station's log, which this page was built from, first
+         * rebuilt the whole list whenever a filter changed. There one
+         * keystroke in the search box measured 597 ms at 1959 entries, the
+         * layout that follows included - more than half a second of frozen
+         * page per character, and it grows with the log. Most of that was
+         * work already done: the same lines built again from the same
+         * entries, and every timestamp put through the locale formatter a
+         * second time.
          *
-         * A line is now made once and then only told whether it is wanted,
-         * which measured 2 ms for the same 1959.
+         * A line is now made once and then only told whether it is wanted.
+         * Measured there again, one keystroke took 50 ms at 2033 entries,
+         * layout included as before: twelve times less. Deciding which lines
+         * are wanted is the least of it, 2 ms for the 1959 above; the rest is
+         * the browser laying the list out again.
          */
         function applyFilters(): void {
 
             const lines = lineBox.children;
             const many  = Math.min(lines.length, logs.entries.length);
-            const last  = logs.entries.length - 1;
 
             shown = 0;
 
@@ -210,8 +215,9 @@ export const logsPage: Page = {
                 // Line 0 is the newest, and the newest entry is the last one
                 // the store holds. Both lists are anchored at the newest end,
                 // which is what keeps this sound even while the older end of
-                // one of them is being trimmed.
-                const wanted = matches(logs.entries[last - index]!);
+                // one of them is being trimmed. entryAt is the one place that
+                // pairing is written down, and its test holds it to drawOrder.
+                const wanted = matches(entryAt(logs.entries, index)!);
 
                 lines[index]!.classList.toggle('filtered-out', !wanted);
 
@@ -244,10 +250,12 @@ export const logsPage: Page = {
                 const anchor     = lineBox.firstElementChild;
                 const anchorWas  = anchor?.getBoundingClientRect().top ?? 0;
 
-                // "added" arrives oldest first. Reversing it before it goes in
-                // at the top is what puts the newest of the batch at the very
+                // "added" arrives oldest first. Drawn in the same order as
+                // everything else, the newest of the batch goes at the very
                 // top rather than buried under the rest of its own batch.
-                lineBox.insertAdjacentHTML('afterbegin', added.map(lineHTML).reverse().join(''));
+                const batch = drawOrder(added);
+
+                lineBox.insertAdjacentHTML('afterbegin', batch.map(lineHTML).join(''));
 
                 // The vehicle keeps a bounded log and so does this page; what
                 // fell out of the store has to leave the list as well. What
@@ -265,16 +273,15 @@ export const logsPage: Page = {
                 // again would put the cost of a filter change on every single
                 // line the vehicle writes.
                 //
-                // They are the first lines of the list, in the reverse of the
-                // order they arrived in: the oldest of the batch is the last
-                // of them.
+                // They are the first lines of the list now, in the order the
+                // batch was drawn in.
                 let any = false;
 
-                added.forEach((entry, index) => {
+                batch.forEach((entry, index) => {
 
                     const wanted = matches(entry);
 
-                    lineBox.children[added.length - 1 - index]?.classList.toggle('filtered-out', !wanted);
+                    lineBox.children[index]?.classList.toggle('filtered-out', !wanted);
 
                     if (wanted) {
                         shown++;
