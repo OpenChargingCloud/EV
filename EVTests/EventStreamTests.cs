@@ -27,6 +27,7 @@ using NUnit.Framework;
 using org.GraphDefined.Vanaheimr.Hermod;
 
 using cloud.charging.open.EV.Configuration;
+using cloud.charging.open.protocols.WWCP.node.Configuration;
 
 #endregion
 
@@ -103,7 +104,7 @@ namespace cloud.charging.open.EV.Tests
             vehicle = new EV(
                           HTTPPort:          IPPort.Parse(port),
                           AccountsPath:      Path.Combine(directory, "accounts"),
-                          ConfigFile:        new EVConfigFile(Path.Combine(directory, EVConfigFile.DefaultFileName)),
+                          ConfigFile:        new WWCPConfigFile(Path.Combine(directory, WWCPConfigFile.DefaultFileName)),
                           CertificatesPath:  Path.Combine(directory, "certificates"),
                           LogToConsole:      false,
                           BridgeDebugLog:    false

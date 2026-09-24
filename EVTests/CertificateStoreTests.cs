@@ -19,11 +19,9 @@
 
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-
+using cloud.charging.open.protocols.WWCP.node;
+using cloud.charging.open.protocols.WWCP.node.logging;
 using NUnit.Framework;
-
-using cloud.charging.open.EV.Certificates;
-using cloud.charging.open.EV.Logging;
 
 #endregion
 
@@ -605,7 +603,7 @@ namespace cloud.charging.open.EV.Tests
                 Assert.That(entry!.IsUsable,  Is.False);
             });
 
-            Assert.That(store.ValidatorFor(CertificateKind.V2GRoot), Is.Null,
+            Assert.That(EV.ValidatorFor(store, CertificateKind.V2GRoot, log), Is.Null,
                         "an expired root vouches for nothing, so there is nothing to validate against");
 
         }
@@ -620,14 +618,14 @@ namespace cloud.charging.open.EV.Tests
 
             var store = new CertificateStore(directory, log);
 
-            Assert.That(store.ValidatorFor(CertificateKind.MORoot), Is.Null,
+            Assert.That(EV.ValidatorFor(store, CertificateKind.MORoot, log), Is.Null,
                         "null is what 'this vehicle was never told' looks like");
 
             using var root = Root("An MO Root");
 
             Assert.That(store.Import(Pem(root), CertificateKind.MORoot, null, null, out _, out var error), Is.True, error);
 
-            Assert.That(store.ValidatorFor(CertificateKind.MORoot), Is.Not.Null);
+            Assert.That(EV.ValidatorFor(store, CertificateKind.MORoot, log), Is.Not.Null);
 
         }
 
@@ -647,8 +645,8 @@ namespace cloud.charging.open.EV.Tests
             Assert.That(store.Import(Pem(v2g), CertificateKind.V2GRoot, null, null, out _, out var e1), Is.True, e1);
             Assert.That(store.Import(Pem(mo),  CertificateKind.MORoot,  null, null, out _, out var e2), Is.True, e2);
 
-            var forV2G = store.ValidatorFor(CertificateKind.V2GRoot);
-            var forMO  = store.ValidatorFor(CertificateKind.MORoot);
+            var forV2G = EV.ValidatorFor(store, CertificateKind.V2GRoot, log);
+            var forMO  = EV.ValidatorFor(store, CertificateKind.MORoot,  log);
 
             // The whole reason the three are kept apart: one bag would let the
             // OEM root vouch for a contract.
@@ -657,7 +655,7 @@ namespace cloud.charging.open.EV.Tests
                 Assert.That(forMO!. RootSubjects, Has.Exactly(1).Items);
                 Assert.That(forV2G!.RootSubjects.First(), Does.Contain("A V2G Root"));
                 Assert.That(forMO!. RootSubjects.First(), Does.Contain("An MO Root"));
-                Assert.That(store.ValidatorFor(CertificateKind.OEMRoot), Is.Null);
+                Assert.That(EV.ValidatorFor(store, CertificateKind.OEMRoot, log), Is.Null);
             });
 
         }
@@ -824,7 +822,7 @@ namespace cloud.charging.open.EV.Tests
             var store = new CertificateStore(directory, log);
 
             // A credential is not a trust anchor and has no validator to give.
-            Assert.Throws<ArgumentException>(() => store.ValidatorFor(CertificateKind.Contract));
+            Assert.Throws<ArgumentException>(() => EV.ValidatorFor(store, CertificateKind.Contract, log));
 
         }
 

@@ -24,6 +24,7 @@ using NUnit.Framework;
 using org.GraphDefined.Vanaheimr.Hermod.DNS;
 
 using cloud.charging.open.EV.Configuration;
+using cloud.charging.open.protocols.WWCP.node.Configuration;
 
 #endregion
 
@@ -50,7 +51,7 @@ namespace cloud.charging.open.EV.Tests
         private String directory = "";
 
         private String ConfigurationPath
-            => Path.Combine(directory, EVConfigFile.DefaultFileName);
+            => Path.Combine(directory, WWCPConfigFile.DefaultFileName);
 
         #endregion
 
@@ -193,7 +194,7 @@ namespace cloud.charging.open.EV.Tests
 
             var problem = Assert.Throws<InvalidOperationException>(() => new EV(
                                                                              AccountsPath:      Path.Combine(directory, "accounts"),
-                                                                             ConfigFile:        new EVConfigFile(ConfigurationPath),
+                                                                             ConfigFile:        new WWCPConfigFile(ConfigurationPath),
                                                                              CertificatesPath:  Path.Combine(directory, "certificates"),
                                                                              LogToConsole:      false
                                                                          ));

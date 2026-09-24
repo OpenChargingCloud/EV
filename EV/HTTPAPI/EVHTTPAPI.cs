@@ -26,9 +26,9 @@ using Newtonsoft.Json.Linq;
 using org.GraphDefined.Vanaheimr.Illias;
 using org.GraphDefined.Vanaheimr.Hermod.HTTP;
 
-using cloud.charging.open.EV.Certificates;
-using cloud.charging.open.EV.Logging;
-using cloud.charging.open.EV.Web;
+using cloud.charging.open.protocols.WWCP.node.logging;
+using cloud.charging.open.protocols.WWCP.node.Configuration;
+using cloud.charging.open.protocols.WWCP.node;
 
 #endregion
 
@@ -57,7 +57,7 @@ namespace cloud.charging.open.EV
         /// <summary>
         /// The default root path of this API.
         /// </summary>
-        public static readonly HTTPPath  DefaultAPIPath      = HTTPPath.Parse("/api");
+        public static readonly HTTPPath  DefaultAPIPath      = AWWCPNode.DefaultAPIPath;
 
         /// <summary>
         /// The identification of the Server-Sent Events source.
@@ -166,12 +166,12 @@ namespace cloud.charging.open.EV
         /// <param name="Log">Everything that happens inside this vehicle.</param>
         /// <param name="APIPath">The root path of the API, "/api" by default.</param>
         /// <param name="Version">The version reported by the status resource.</param>
-        public EVHTTPAPI(HTTPServer       HTTPServer,
-                         EV               Vehicle,
-                         HTTPExtAPI       ExtAPI,
-                         EventLog         Log,
-                         HTTPPath?        APIPath   = null,
-                         String?          Version   = null)
+        public EVHTTPAPI(HTTPServer  HTTPServer,
+                         EV          Vehicle,
+                         HTTPExtAPI  ExtAPI,
+                         EventLog    Log,
+                         HTTPPath?   APIPath   = null,
+                         String?     Version   = null)
 
             : base(HTTPServer,
                    RootPath:     APIPath ?? DefaultAPIPath,

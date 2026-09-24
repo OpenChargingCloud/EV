@@ -27,6 +27,7 @@ using cloud.charging.open.protocols.ISO15118.StateMachines;
 using cloud.charging.open.protocols.ISO15118.Transport;
 using cloud.charging.open.protocols.ISO15118.T1S;
 using cloud.charging.open.protocols.ISO15118.T1S.Transport;
+using cloud.charging.open.protocols.WWCP.node.Configuration;
 
 #endregion
 

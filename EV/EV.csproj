@@ -22,6 +22,7 @@
          along, so the four references above are what this project uses directly rather than all it
          gets. -->
     <ProjectReference Include="..\..\WWCP_ISO15118\WWCP_ISO15118_SharedCC\WWCP_ISO15118_SharedCC.csproj" />
+    <ProjectReference Include="..\..\WWCP_Node\WWCP_Node\WWCP_Node.csproj" />
   </ItemGroup>
 
   <!--

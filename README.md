@@ -15,20 +15,23 @@ starts the thing; everything a vehicle *is* lives here.
 
 | | |
 |---|---|
-| `EV.cs` | the vehicle: its clock, its log, its HTTP server, and one SDP discovery at a time |
+| `EV.cs` | the vehicle: what it adds to a node - its battery, its JSON API, and one SDP discovery at a time |
 | `EV.Session.cs` | charging: one session at a time, and the handle a pause leaves behind |
-| `EV.Configuration.cs` | what the Configuration pages read and write - DNS, NTS, the battery, the link, the certificates, the session |
-| `EV.Clock.cs` | what time it thinks it is, and what that is worth |
-| `EV.Diagnostics.cs` | asking a name server or a time server something, step by step |
+| `EV.Configuration.cs` | what the Configuration pages read and write of the vehicle's own - the battery, the link, the certificates, the session |
 | `HTTPAPI/EVHTTPAPI.cs` | the JSON API at `/api`, and the Server-Sent Events stream everything travels on |
 | `ISO15118/V2GLink.cs` | the wire below the charging cable: which interfaces could carry it, SLAC, the 10BASE-T1S bus of an MCS coupler, and the SDP client |
 | `ISO15118/V2GSession.cs` | one session, from the TCP connection to `SessionStop` |
 | `ISO15118/VehicleCredentials.cs` | the credentials a session was given, turned into the shapes it needs - and checked against the roots this vehicle believes |
-| `Certificates/` | the store: what a certificate is for, what may go in, and what survives a restart |
-| `Configuration/` | one record per section of the configuration file |
-| `Web/` | who may sign in, what each role may do, and the session cookie |
-| `Logging/` | one log for everything, in memory and on the stream |
+| `Configuration/` | one record per section of the configuration file that is the vehicle's: `vehicle`, `v2g`, `session` |
 | `Frontend/` | the web interface: TypeScript and SCSS, bundled by webpack and embedded into the assembly |
+
+Everything a running vehicle is before it is a vehicle - its log, its
+configuration file, name resolution and the time, the certificate store, who
+may sign in, and the HTTP server all of that sits behind - is not here. That
+is [WWCP_Node](https://github.com/OpenChargingCloud/WWCP_Node), the part every
+one of these programs shares, and `EV` is one `AWWCPNode` with a battery: its
+sections go into the same configuration file, and its JSON API below the
+node's `/api`.
 
 
 ## The web interface is part of the assembly
@@ -98,7 +101,7 @@ says it has started, and the session resource carries the result when it ends.
 ## Certificates, and where they live
 
 Everything this vehicle believes and everything it presents is in one store —
-`Certificates/CertificateStore.cs`, a directory of files with an `index.json`
+WWCP_Node's `CertificateStore`, a directory of files with an `index.json`
 beside them — and is addressed by a short handle rather than by a path.
 
 Two groups, and they behave differently in every respect that matters. A

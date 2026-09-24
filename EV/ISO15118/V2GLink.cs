@@ -34,11 +34,11 @@ using cloud.charging.open.protocols.ISO15118.T1S.PLCA;
 using cloud.charging.open.protocols.ISO15118.T1S.Transport;
 
 using cloud.charging.open.EV.Configuration;
-using cloud.charging.open.EV.Logging;
 
 // System.Diagnostics carries an EventLog of its own, and this project's is the
 // one every line below means.
 using Stopwatch = System.Diagnostics.Stopwatch;
+using cloud.charging.open.protocols.WWCP.node.logging;
 
 #endregion
 

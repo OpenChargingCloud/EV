@@ -29,9 +29,9 @@ using cloud.charging.open.protocols.ISO15118.StateMachines;
 using cloud.charging.open.protocols.ISO15118.Transport;
 using cloud.charging.open.protocols.ISO15118.T1S.Transport;
 
-using cloud.charging.open.EV.Certificates;
 using cloud.charging.open.EV.Configuration;
 using cloud.charging.open.EV.ISO15118;
+using cloud.charging.open.protocols.WWCP.node;
 
 #endregion
 
@@ -99,12 +99,6 @@ namespace cloud.charging.open.EV
         /// What one session does, beyond what the vehicle itself is.
         /// </summary>
         public SessionConfiguration   SessionSettings  { get; private set; } = new ();
-
-        /// <summary>
-        /// Every certificate this vehicle has: the roots it believes, and the credentials the settings
-        /// above choose from.
-        /// </summary>
-        public CertificateStore       Certificates     { get; }
 
         /// <summary>
         /// Whether a session is running right now.
@@ -569,9 +563,9 @@ namespace cloud.charging.open.EV
                        OEMCertificate       = Resolve(settings.OEMCertificate,      CertificateKind.OEMProvisioning,    "oemCertificate"),
                        TariffCertificate    = Resolve(settings.TariffCertificate,   CertificateKind.TariffVerification, "tariffCertificate"),
 
-                       V2GRoots             = Certificates.ValidatorFor(CertificateKind.V2GRoot),
-                       MORoots              = Certificates.ValidatorFor(CertificateKind.MORoot),
-                       OEMRoots             = Certificates.ValidatorFor(CertificateKind.OEMRoot),
+                       V2GRoots             = ValidatorFor(Certificates, CertificateKind.V2GRoot, Log),
+                       MORoots              = ValidatorFor(Certificates, CertificateKind.MORoot,  Log),
+                       OEMRoots             = ValidatorFor(Certificates, CertificateKind.OEMRoot, Log),
 
                        Battery              = BuildBattery(),
 

@@ -24,6 +24,7 @@ using NUnit.Framework;
 using org.GraphDefined.Vanaheimr.Hermod.DNS;
 
 using cloud.charging.open.EV.Configuration;
+using cloud.charging.open.protocols.WWCP.node.Configuration;
 
 #endregion
 

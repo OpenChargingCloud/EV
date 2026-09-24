@@ -43,17 +43,11 @@ namespace cloud.charging.open.EV.Configuration
     /// order is: system default, then what the constructor was given, then what
     /// this file says - each one only where it actually speaks.
     /// </remarks>
-    /// <param name="DNS">How this vehicle resolves names.</param>
-    /// <param name="NTS">Where this vehicle reads the time.</param>
     /// <param name="Vehicle">What this vehicle is, and what its battery wants.</param>
     /// <param name="V2G">The wire below the charging cable, from this side.</param>
-    /// <param name="Certificates">Where the certificates this vehicle believes and presents are kept.</param>
     /// <param name="Session">What this vehicle does once it has found a station.</param>
-    public sealed record EVConfiguration(DNSConfiguration?           DNS           = null,
-                                         NTSConfiguration?           NTS           = null,
-                                         VehicleConfiguration?       Vehicle       = null,
+    public sealed record EVConfiguration(VehicleConfiguration?       Vehicle       = null,
                                          V2GConfiguration?           V2G           = null,
-                                         CertificatesConfiguration?  Certificates  = null,
                                          SessionConfiguration?       Session       = null)
     {
 
@@ -63,8 +57,10 @@ namespace cloud.charging.open.EV.Configuration
         /// Whether this document says anything at all.
         /// </summary>
         public Boolean IsEmpty
-            => DNS is null && NTS is null && Vehicle is null && V2G is null &&
-               Certificates is null && Session is null;
+
+            => Vehicle      is null &&
+               V2G          is null &&
+               Session      is null;
 
         #endregion
 
@@ -83,7 +79,7 @@ namespace cloud.charging.open.EV.Configuration
         /// Sections this vehicle does not know are passed over without a word.
         /// A file written by a newer vehicle should still start an older one,
         /// and the file keeps them - see
-        /// <see cref="EVConfigFile.TryReplaceSection"/>.
+        /// <see cref="WWCPConfigFile.TryReplaceSection"/>.
         /// </remarks>
         public static Boolean TryParse(JObject                                   JSON,
                                        [NotNullWhen(true)]  out EVConfiguration?  Configuration,
@@ -92,46 +88,6 @@ namespace cloud.charging.open.EV.Configuration
 
             Configuration  = null;
             Error          = null;
-
-            #region DNS
-
-            DNSConfiguration? dns = null;
-
-            if (JSON[DNSConfiguration.SectionName] is JToken dnsToken && dnsToken.Type != JTokenType.Null)
-            {
-
-                if (dnsToken is not JObject dnsJSON)
-                {
-                    Error = $"'{DNSConfiguration.SectionName}' must be a JSON object.";
-                    return false;
-                }
-
-                if (!DNSConfiguration.TryParse(dnsJSON, out dns, out Error))
-                    return false;
-
-            }
-
-            #endregion
-
-            #region NTS
-
-            NTSConfiguration? nts = null;
-
-            if (JSON[NTSConfiguration.SectionName] is JToken ntsToken && ntsToken.Type != JTokenType.Null)
-            {
-
-                if (ntsToken is not JObject ntsJSON)
-                {
-                    Error = $"'{NTSConfiguration.SectionName}' must be a JSON object.";
-                    return false;
-                }
-
-                if (!NTSConfiguration.TryParse(ntsJSON, out nts, out Error))
-                    return false;
-
-            }
-
-            #endregion
 
             #region Vehicle
 
@@ -173,26 +129,6 @@ namespace cloud.charging.open.EV.Configuration
 
             #endregion
 
-            #region Certificates
-
-            CertificatesConfiguration? certificates = null;
-
-            if (JSON[CertificatesConfiguration.SectionName] is JToken certificatesToken && certificatesToken.Type != JTokenType.Null)
-            {
-
-                if (certificatesToken is not JObject certificatesJSON)
-                {
-                    Error = $"'{CertificatesConfiguration.SectionName}' must be a JSON object.";
-                    return false;
-                }
-
-                if (!CertificatesConfiguration.TryParse(certificatesJSON, out certificates, out Error))
-                    return false;
-
-            }
-
-            #endregion
-
             #region Session
 
             SessionConfiguration? session = null;
@@ -213,7 +149,12 @@ namespace cloud.charging.open.EV.Configuration
 
             #endregion
 
-            Configuration = new EVConfiguration(dns, nts, vehicle, v2g, certificates, session);
+            Configuration = new EVConfiguration(
+                                vehicle,
+                                v2g,
+                                session
+                            );
+
             return true;
 
         }
@@ -230,15 +171,14 @@ namespace cloud.charging.open.EV.Configuration
 
             var json = new JObject();
 
-            if (DNS     is not null)  json.Add(DNSConfiguration.    SectionName,  DNS.    ToJSON());
-            if (NTS     is not null)  json.Add(NTSConfiguration.    SectionName,  NTS.    ToJSON());
-            if (Vehicle is not null)  json.Add(VehicleConfiguration.SectionName,  Vehicle.ToJSON());
-            if (V2G     is not null)  json.Add(V2GConfiguration.    SectionName,  V2G.    ToJSON());
+            if (Vehicle is not null)
+                json.Add(VehicleConfiguration.SectionName,  Vehicle.ToJSON());
 
-            if (Certificates is not null)
-                json.Add(CertificatesConfiguration.SectionName, Certificates.ToJSON());
+            if (V2G     is not null)
+                json.Add(V2GConfiguration.    SectionName,  V2G.    ToJSON());
 
-            if (Session is not null)  json.Add(SessionConfiguration.SectionName,  Session.ToJSON());
+            if (Session is not null)
+                json.Add(SessionConfiguration.SectionName,  Session.ToJSON());
 
             return json;
 
@@ -254,12 +194,9 @@ namespace cloud.charging.open.EV.Configuration
                    ? "nothing configured"
                    : String.Join(", ",
                          new[] {
-                             DNS     is not null ? "DNS"             : null,
-                             NTS     is not null ? "NTS"             : null,
-                             Vehicle is not null ? Vehicle.ToString() : null,
-                             V2G          is not null ? V2G.         ToString() : null,
-                             Certificates is not null ? Certificates.ToString() : null,
-                             Session      is not null ? Session.     ToString() : null
+                             Vehicle?.     ToString(),
+                             V2G?.         ToString(),
+                             Session?.     ToString()
                          }.Where(section => section is not null));
 
         #endregion
