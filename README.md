@@ -224,3 +224,14 @@ performance tables; and there is no electrical layer at all. The battery is
 arithmetic on a simulated clock — linear below the taper knee, no temperature,
 no losses, no ageing — so a run that ends "at 100 %" is reporting a sum and not
 a charging curve.
+
+
+## Your participation
+
+This software is Open Source under the **Affero GPL 3.0 license**.
+We appreciate your participation in this ongoing project, and your help to
+improve it and the e-mobility ICT in general. If you find bugs, want to
+request a feature or send us a pull request, feel free to use the normal
+GitHub features to do so. For this please read the Contributor License
+Agreement carefully and send us a signed copy or use a similar free and
+open license.
