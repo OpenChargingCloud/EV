@@ -128,95 +128,22 @@ import.
 
 ## Name resolution and the time
 
-Both are read from a configuration file, in the same two sections a charging
-station and an energy meter use, so one file can be written once and copied:
+Both are the node's rather than the vehicle's: the `dns` and `nts` sections of
+the configuration file, read and written the way every one of these programs
+reads and writes them, so that a file written for a charging station or an
+energy meter says the same to a vehicle. What their keys are, what each of
+them is when the file says nothing, and how a group of time servers is asked,
+agreed on and held to its certificates is written down once, in
+[WWCP_Node's README](https://github.com/OpenChargingCloud/WWCP_Node#name-resolution-and-the-time).
 
-```json
-{
-  "dns": { "enabled": true, "servers": [ "192.168.1.1" ] },
-  "nts": { "enabled": true,
-           "servers": [ "ptbtime1.ptb.de", "ptbtime2.ptb.de",
-                        "ptbtime3.ptb.de", "ptbtime4.ptb.de" ],
-           "minServers": 2,
-           "checkEverySeconds": 900,
-           "legalTimeAuthority": "PTB" }
-}
-```
-
-That `dns` block is one name server, asked over UDP on port 53. An entry of its
-`servers` is an address or a host name, or an object saying more than that -
-the form the DNS page writes the list back in:
-
-```json
-{ "address": "192.168.1.1", "port": 53, "transport": "UDP", "queryTimeoutSeconds": 2 }
-```
-
-`udp://192.168.1.1:53` is how the log names a name server, not a form the file
-takes. A file saying it is refused at the start, with the entry named.
-
-That `nts` block is what a vehicle asks when the file says nothing at all: the
-PTB's four, of which two have to answer. Naming them changes nothing; it is
-written out here because a file that names its time servers is a file somebody
-can check.
-
-Every key of the section, and what it is when absent:
-
-| Key | Default | |
-|---|---|---|
-| `enabled` | `true` | whether to ask at all |
-| `servers` | the four above | a list, see below |
-| `minServers` | `2`, or all of them when fewer | how many must answer for the group to have a time |
-| `maxDeviationSeconds` | `60` | how far apart they may be before it is written down |
-| `hostname` | - | one server instead of a list |
-| `ntsKEPort`, `ntpPort` | `4460`, `123` | for that one server |
-| `timeoutSeconds` | `10` | per request |
-| `checkEverySeconds` | `900` | how often the clock is checked |
-| `legalTimeAuthority` | - | who the operator says stands behind it |
-| `legalTimeToleranceSeconds` | `1` | how far off the clock may be |
-| `legalTimeMaxAgeSeconds` | `3600` | how old the last check may be |
-
-An entry of `servers` is a host name, or an object saying more than the name:
-
-```json
-{ "hostname": "time.local", "priority": 0, "ntsKEPort": 4460, "enabled": true }
-```
-
-Servers sharing a priority are **one band** and are asked together; a lower
-priority is asked first. The four above share priority 0, because they are
-peers - putting them in separate bands would say something about them that is
-not true.
-
-A section naming a single `hostname` and no list becomes a group of one, which
-is what every file written before there were groups says, and it keeps working.
-A group of one is held to a quorum of one, and a section asking two of it is
-refused.
-
-A section that is absent is not a section set to nothing: it means the file has
-no opinion, and what the constructor was handed stands. The same holds key by
-key - a section mentioning nothing but `enabled` leaves the servers alone
-rather than quietly reducing four to one, and one mentioning nothing but
-`minServers` or `maxDeviationSeconds` holds the servers the vehicle already
-has to it. A quorum those servers could never reach is refused: at the start,
-before anything is asked, and over the API, before anything is written into
-the file.
-
-The whole group is asked on that interval - authenticated, and without stepping
-the vehicle's own clock - and what it reports is what the servers that answered
-agree on, with a line for each of them. Two servers that agree catch what one
-cannot: a server that is wrong rather than absent.
-
-"Legal time" is not a claim this vehicle can make on its own. It holds only
-while a check against a time source **the operator has vouched for** is both
-recent enough and close enough; without a named authority this is an ordinary
-clock that happens to be checked, and the clock's own JSON says so in as many
-words. `GET /api/v1/clock` serves it to anybody signed in: the time, the group
-it is checked against, when it was last checked and how far off it was then -
-and `legal`, with a `why` when it is not, `notClaimed` among them.
-
-A host name written back into this file carries the root label -
-`ptbtime1.ptb.de.` - because that is the absolute form it was parsed into, and
-not a stray character. What the vehicle prints for somebody to read drops it
-again.
+What the vehicle adds is the way in. Its DNS client and NTS client pages read
+and change the two sections through `/api/v1/configuration/dns` and
+`/api/v1/configuration/nts`, and ask a name server or a time server something
+from there; asking a time server measures the clock and never steps it.
+`GET /api/v1/clock` serves the clock to anybody signed in, because a screen
+that shows the time has to be able to say what it is worth: the time, the
+group it is checked against, when it was last checked and how far off it was
+then - and `legal`, with a `why` when it is not, `notClaimed` among them.
 
 
 ## What it is not
