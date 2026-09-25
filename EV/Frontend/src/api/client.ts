@@ -758,13 +758,10 @@ export const answerWithin = 15_000;
 export const actWithin = 30_000;
 
 /**
- * How long a question the vehicle has to put to somebody else may take.
- *
- * The vehicle tries its name servers in turn, so the longest a lookup can
- * honestly take is one timeout per server: two servers at three seconds each
- * was measured at 6.2 seconds. The page waits for all of them and the usual
- * allowance on top, so that what it gives up on is silence from the vehicle
- * rather than patience the vehicle was told to have.
+ * How long a question the vehicle has to put to somebody else may take: the
+ * timeouts of the steps it takes one after another, added up, and the usual
+ * allowance on top - so that what the page gives up on is silence from the
+ * vehicle rather than patience it was told to have.
  */
 export function afterAsking(Timeouts: number[]): number {
     return Timeouts.reduce((total, seconds) => total + seconds * 1000, 0) + answerWithin;
@@ -992,18 +989,16 @@ export const api = {
         /**
          * Make the vehicle look a name up. A POST because it sends traffic.
          *
-         * @param timeouts  what each name server is allowed, in seconds: the
-         *                  vehicle tries them in turn, so their sum is the
-         *                  longest this can honestly take.
+         * @param seconds  how long the name servers asked may take - see
+         *                 pages/dnsServers.ts.
+         * @param server   which configured name server to ask, by its place in
+         *                 the list - or undefined to resolve the way the
+         *                 vehicle resolves anything else, asking all of them
+         *                 at once.
          */
-        /**
-         * @param server  which configured name server to ask, by its place in
-         *                the list - or undefined to resolve the way the vehicle
-         *                resolves anything else, trying them in turn.
-         */
-        query: (name: string, recordTypes: string[], timeouts: number[], server?: number) =>
+        query: (name: string, recordTypes: string[], seconds: number, server?: number) =>
                    request<DNSQueryResult>('POST', '/configuration/dns/query', { name, recordTypes, server },
-                                           afterAsking(timeouts))
+                                           afterAsking([ seconds ]))
     },
 
     nts: {
