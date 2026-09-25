@@ -49,6 +49,7 @@ namespace cloud.charging.open.EV.Tests
 
         private String  directory  = "";
         private EV?     vehicle;
+        private Uri?    address;
 
         #endregion
 
@@ -112,8 +113,10 @@ namespace cloud.charging.open.EV.Tests
 
             await vehicle.Start();
 
+            address    = new Uri($"http://127.0.0.1:{port}/");
+
             var client = new HttpClient {
-                             BaseAddress  = new Uri($"http://127.0.0.1:{port}/"),
+                             BaseAddress  = address,
                              Timeout      = TimeSpan.FromSeconds(30)
                          };
 
@@ -123,6 +126,103 @@ namespace cloud.charging.open.EV.Tests
                                                          );
 
             return client;
+
+        }
+
+        #endregion
+
+        #region (helper) SignedIn()
+
+        /// <summary>
+        /// A client of the vehicle StartedVehicle() started, signed in through
+        /// the sign-in route and so holding a session - which the HTTP Basic
+        /// authentication of StartedVehicle()'s own client does not, and only a
+        /// session can be signed out of.
+        /// </summary>
+        private async Task<HttpClient> SignedIn()
+        {
+
+            var client = new HttpClient(new HttpClientHandler { CookieContainer = new CookieContainer() }) {
+                             BaseAddress  = address,
+                             Timeout      = TimeSpan.FromSeconds(30)
+                         };
+
+            var answer = await client.PostAsync("ext/login", new FormUrlEncodedContent(new Dictionary<String, String> {
+                                                                 ["login"]     = "root",
+                                                                 ["password"]  = vehicle!.GeneratedPassword!
+                                                             }));
+
+            Assert.That(answer.IsSuccessStatusCode, Is.True,
+                        "Signing in did not work, so a test of signing out would pass for the wrong reason.");
+
+            return client;
+
+        }
+
+        #endregion
+
+        #region (helper) OpenStream(Client, Lines)
+
+        /// <summary>
+        /// Open the event stream and wait until an entry logged after it was
+        /// opened has come down it, keeping every line that came.
+        /// </summary>
+        private async Task<StreamReader> OpenStream(HttpClient Client, List<String> Lines)
+        {
+
+            var response = await Client.GetAsync("api/v1/events", HttpCompletionOption.ResponseHeadersRead);
+
+            Assert.That(response.IsSuccessStatusCode, Is.True, "the event stream opened");
+
+            var reader   = new StreamReader(await response.Content.ReadAsStreamAsync());
+            var marker   = "The stream is live " + Guid.NewGuid().ToString("N")[..8];
+
+            vehicle!.Log.Info(marker, "test");
+
+            Assert.That(await ReadUntil(reader, line => { Lines.Add(line); return line.Contains(marker); }, TimeSpan.FromSeconds(10)),
+                        Is.True, "an entry logged after the stream opened came down it");
+
+            return reader;
+
+        }
+
+        #endregion
+
+        #region (helper) EndsWithin(Reader, Lines, Within)
+
+        /// <summary>
+        /// Whether the vehicle ends the stream within the given time, keeping
+        /// every line that came before it did.
+        /// </summary>
+        /// <remarks>
+        /// ReadUntil() cannot tell the two apart: it answers false both for a
+        /// stream that ended and for one that merely went on without the line,
+        /// and a stream that goes on is exactly what a test of a stream that
+        /// should have ended is looking for.
+        /// </remarks>
+        private static async Task<Boolean> EndsWithin(StreamReader  Reader,
+                                                      List<String>  Lines,
+                                                      TimeSpan      Within)
+        {
+
+            using var timeout = new CancellationTokenSource(Within);
+
+            try
+            {
+                while (await Reader.ReadLineAsync(timeout.Token) is String line)
+                    Lines.Add(line);
+
+                return true;
+            }
+            catch (OperationCanceledException)
+            {
+                return false;
+            }
+            catch (IOException)
+            {
+                // Cut rather than closed is ended, too.
+                return true;
+            }
 
         }
 
@@ -241,6 +341,119 @@ namespace cloud.charging.open.EV.Tests
             {
                 Assert.That(secondEntry,                                        Is.True,   "and so did the one after it");
                 Assert.That(lines.Count(line => line.Contains($"\"{marker}\"")), Is.EqualTo(1), "once");
+            });
+
+        }
+
+        #endregion
+
+        #region AStreamEndsWithTheSessionThatOpenedIt()
+
+        /// <summary>
+        /// Signed out, a stream opened with that session ends - and a line
+        /// logged after the sign-out does not come down it first.
+        /// </summary>
+        /// <remarks>
+        /// Measured on a local controller before this was so: signed out, the
+        /// Logs page went on saying "live" and showing every line it wrote for
+        /// as long as it was watched. A stream is a request that is answered
+        /// for hours, and it was asked about its session once, when it opened.
+        /// </remarks>
+        [Test]
+        public async Task AStreamEndsWithTheSessionThatOpenedIt()
+        {
+
+            using var basic     = await StartedVehicle();
+
+            vehicle!.API.EventStreamHeartbeat = TimeSpan.FromMilliseconds(300);
+
+            using var http      = await SignedIn();
+
+            var lines           = new List<String>();
+            using var reader    = await OpenStream(http, lines);
+
+            Assert.That((await http.PostAsync("api/v1/auth/logout", null)).StatusCode,
+                        Is.EqualTo(HttpStatusCode.NoContent));
+
+            var afterwards      = "Logged after the sign-out " + Guid.NewGuid().ToString("N")[..8];
+            vehicle.Log.Info(afterwards, "test");
+
+            var ended           = await EndsWithin(reader, lines, TimeSpan.FromSeconds(5));
+
+            Assert.Multiple(() => {
+                Assert.That(ended,                                          Is.True,   "the stream went on after its session had ended");
+                Assert.That(lines.Any(line => line.Contains(afterwards)),   Is.False,  "a line logged after the sign-out was sent to the session that had signed out");
+            });
+
+        }
+
+        #endregion
+
+        #region AQuietStreamEndsWithItsSessionToo()
+
+        /// <summary>
+        /// And a stream nothing is logged into ends at its next heartbeat, not
+        /// whenever the next line happens to be written - however the session
+        /// ended. Here all of an account's sessions are taken back at once,
+        /// the way a new password takes them, which logs nothing at all.
+        /// </summary>
+        [Test]
+        public async Task AQuietStreamEndsWithItsSessionToo()
+        {
+
+            using var basic     = await StartedVehicle();
+
+            vehicle!.API.EventStreamHeartbeat = TimeSpan.FromMilliseconds(300);
+
+            using var http      = await SignedIn();
+
+            var lines           = new List<String>();
+            using var reader    = await OpenStream(http, lines);
+
+            var session         = vehicle.ExtAPI.Sessions.Single();
+
+            Assert.That(vehicle.ExtAPI.Sessions.RemoveAllForUser(session.UserId), Is.EqualTo(1));
+
+            Assert.That(await EndsWithin(reader, lines, TimeSpan.FromSeconds(3)), Is.True,
+                        "a stream nothing was logged into went on after its session had ended");
+
+        }
+
+        #endregion
+
+        #region AStreamOfAnotherSessionGoesOn()
+
+        /// <summary>
+        /// Only the stream of the session that ended ends: a second browser,
+        /// signed in on its own, goes on being sent the log.
+        /// </summary>
+        [Test]
+        public async Task AStreamOfAnotherSessionGoesOn()
+        {
+
+            using var basic     = await StartedVehicle();
+
+            using var mine      = await SignedIn();
+            using var theirs    = await SignedIn();
+
+            var endingLines     = new List<String>();
+            var goingLines      = new List<String>();
+            using var ending    = await OpenStream(mine,   endingLines);
+            using var going     = await OpenStream(theirs, goingLines);
+
+            Assert.That((await mine.PostAsync("api/v1/auth/logout", null)).StatusCode,
+                        Is.EqualTo(HttpStatusCode.NoContent));
+
+            var afterwards      = "Logged after one of two signed out " + Guid.NewGuid().ToString("N")[..8];
+            vehicle!.Log.Info(afterwards, "test");
+
+            var arrived         = await ReadUntil (going,  line => { goingLines.Add(line); return line.Contains(afterwards); }, TimeSpan.FromSeconds(10));
+            var ended           = await EndsWithin(ending, endingLines, TimeSpan.FromSeconds(5));
+
+            Assert.Multiple(() => {
+                Assert.That(arrived,                                              Is.True,   "the stream of the session still signed in stopped too");
+                Assert.That(ended,                                                Is.True,   "the stream of the session that signed out went on");
+                Assert.That(endingLines.Any(line => line.Contains(afterwards)),   Is.False,  "a line logged after the sign-out was sent to the session that had signed out");
             });
 
         }
