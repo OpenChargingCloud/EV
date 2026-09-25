@@ -505,9 +505,14 @@ export interface SessionRun {
     pausedRun?:          SessionRun;
 }
 
-/** What a certificate is for. Roots are believed; the rest are presented. */
+/**
+ * What a certificate is for. Roots are believed and the vehicle's own
+ * certificates are presented; a server certificate is neither, but kept to
+ * recognise a server by its fingerprint.
+ */
 export type CertificateKind = 'v2gRoot' | 'moRoot' | 'oemRoot'
-                            | 'vehicle' | 'contract' | 'oemProvisioning' | 'tariffVerification';
+                            | 'vehicle' | 'contract' | 'oemProvisioning' | 'tariffVerification'
+                            | 'tlsRoot' | 'clientRoot' | 'tlsServer' | 'tlsIdentity';
 
 /** One certificate in the store. Everything but label and active is read out of the file. */
 export interface Certificate {
