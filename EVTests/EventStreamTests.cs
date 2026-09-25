@@ -24,7 +24,9 @@ using System.Text;
 
 using NUnit.Framework;
 
+using org.GraphDefined.Vanaheimr.Illias;
 using org.GraphDefined.Vanaheimr.Hermod;
+using org.GraphDefined.Vanaheimr.Hermod.HTTP;
 
 using cloud.charging.open.EV.Configuration;
 using cloud.charging.open.protocols.WWCP.Node.Configuration;
@@ -454,6 +456,117 @@ namespace cloud.charging.open.EV.Tests
                 Assert.That(arrived,                                              Is.True,   "the stream of the session still signed in stopped too");
                 Assert.That(ended,                                                Is.True,   "the stream of the session that signed out went on");
                 Assert.That(endingLines.Any(line => line.Contains(afterwards)),   Is.False,  "a line logged after the sign-out was sent to the session that had signed out");
+            });
+
+        }
+
+        #endregion
+
+        #region (helper) WithAPIKey(NotAfter = null)
+
+        /// <summary>
+        /// A client of the vehicle StartedVehicle() started that opens it with
+        /// an API key of the account its first start made up, and nothing else:
+        /// no session, no password.
+        /// </summary>
+        private async Task<(HttpClient HTTP, APIKey Key)> WithAPIKey(DateTimeOffset? NotAfter = null)
+        {
+
+            var key   = new APIKey(APIKey_Id.Parse("event-stream-" + Guid.NewGuid().ToString("N")),
+                                   User_Id.Parse("root"),
+                                   NotAfter: NotAfter);
+
+            await vehicle!.ExtAPI.AddAPIKey(key);
+
+            Assert.That(vehicle.ExtAPI.TryGetAPIKey(key.Id, out _), Is.True,
+                        "The API key was not added, so a test of taking it back would pass for the wrong reason.");
+
+            var http  = new HttpClient {
+                            BaseAddress  = address,
+                            Timeout      = TimeSpan.FromSeconds(30)
+                        };
+
+            http.DefaultRequestHeaders.Add("API-Key", key.Id.ToString());
+
+            return (http, key);
+
+        }
+
+        #endregion
+
+        #region AStreamOpenedWithAnAPIKeyEndsWithTheKey()
+
+        /// <summary>
+        /// A stream opened with an API key ends when the key is taken back -
+        /// and a line logged afterwards does not come down it first.
+        /// </summary>
+        /// <remarks>
+        /// Such a stream has no session that could end, and was held to its
+        /// account alone: a key that was revoked went on being sent the log for
+        /// as long as the account it belonged to was there.
+        /// </remarks>
+        [Test]
+        public async Task AStreamOpenedWithAnAPIKeyEndsWithTheKey()
+        {
+
+            using var basic     = await StartedVehicle();
+
+            vehicle!.API.EventStreamHeartbeat = TimeSpan.FromMilliseconds(300);
+
+            var (http, key)     = await WithAPIKey();
+
+            using var client    = http;
+
+            var lines           = new List<String>();
+            using var reader    = await OpenStream(client, lines);
+
+            await vehicle.ExtAPI.RemoveAPIKey(key);
+
+            Assert.That(vehicle.ExtAPI.TryGetAPIKey(key.Id, out _), Is.False, "the API key is gone");
+
+            var afterwards      = "Logged after the key was taken back " + Guid.NewGuid().ToString("N")[..8];
+            vehicle.Log.Info(afterwards, "test");
+
+            var ended           = await EndsWithin(reader, lines, TimeSpan.FromSeconds(5));
+
+            Assert.Multiple(() => {
+                Assert.That(ended,                                          Is.True,   "the stream went on after its API key had been taken back");
+                Assert.That(lines.Any(line => line.Contains(afterwards)),   Is.False,  "a line logged after the key was taken back was sent over it");
+            });
+
+        }
+
+        #endregion
+
+        #region AStreamEndsWhenItsAPIKeyRunsOut()
+
+        /// <summary>
+        /// And one whose key runs out ends at the next heartbeat after, with
+        /// nothing logged and nobody taking anything back.
+        /// </summary>
+        [Test]
+        public async Task AStreamEndsWhenItsAPIKeyRunsOut()
+        {
+
+            using var basic     = await StartedVehicle();
+
+            vehicle!.API.EventStreamHeartbeat = TimeSpan.FromMilliseconds(300);
+
+            // Long enough for the stream to open before the key runs out.
+            var runsOut         = DateTimeOffset.UtcNow.AddSeconds(5);
+            var (http, _)       = await WithAPIKey(runsOut);
+
+            using var client    = http;
+
+            var lines           = new List<String>();
+            using var reader    = await OpenStream(client, lines);
+
+            var ended           = await EndsWithin(reader, lines, runsOut - DateTimeOffset.UtcNow + TimeSpan.FromSeconds(3));
+            var endedAt         = DateTimeOffset.UtcNow;
+
+            Assert.Multiple(() => {
+                Assert.That(ended,    Is.True,                                                "the stream went on after its API key had run out");
+                Assert.That(endedAt,  Is.GreaterThanOrEqualTo(runsOut.AddMilliseconds(-100)),  "the stream ended before its API key ran out, so something else ended it");
             });
 
         }
