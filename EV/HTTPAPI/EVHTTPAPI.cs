@@ -413,7 +413,7 @@ namespace cloud.charging.open.EV
         private Task<HTTPResponse> GetConfiguration(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.ReadConfiguration, false, out _, out var refused))
+            if (!TryAuthorize(Request, Permission.Read(NodeResources.Configuration), false, out _, out var refused))
                 return Task.FromResult(refused);
 
             return Task.FromResult(
@@ -432,7 +432,7 @@ namespace cloud.charging.open.EV
         private Task<HTTPResponse> GetDNSConfiguration(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.ReadConfiguration, false, out _, out var refused))
+            if (!TryAuthorize(Request, Permission.Read(NodeResources.DNS), false, out _, out var refused))
                 return Task.FromResult(refused);
 
             return Task.FromResult(
@@ -449,7 +449,7 @@ namespace cloud.charging.open.EV
         private Task<HTTPResponse> PutDNSConfiguration(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.ChangeNetworkSettings, true, out _, out var refused))
+            if (!TryAuthorize(Request, Permission.Edit(NodeResources.DNS), true, out _, out var refused))
                 return Task.FromResult(refused);
 
             if (!TryParseJSONObject(Request, out var json, out var errorResponse))
@@ -477,7 +477,7 @@ namespace cloud.charging.open.EV
         private async Task<HTTPResponse> PostDNSQuery(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.RunDiagnostics, true, out var user, out var refused))
+            if (!TryAuthorize(Request, Permission.Run (NodeResources.DNS), true, out var user, out var refused))
                 return refused;
 
             if (!TryParseJSONObject(Request, out var json, out var errorResponse))
@@ -514,7 +514,7 @@ namespace cloud.charging.open.EV
         private Task<HTTPResponse> GetNTSConfiguration(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.ReadConfiguration, false, out _, out var refused))
+            if (!TryAuthorize(Request, Permission.Read(NodeResources.NTS), false, out _, out var refused))
                 return Task.FromResult(refused);
 
             return Task.FromResult(
@@ -529,7 +529,7 @@ namespace cloud.charging.open.EV
         private Task<HTTPResponse> PutNTSConfiguration(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.ChangeNetworkSettings, true, out _, out var refused))
+            if (!TryAuthorize(Request, Permission.Edit(NodeResources.NTS), true, out _, out var refused))
                 return Task.FromResult(refused);
 
             if (!TryParseJSONObject(Request, out var json, out var errorResponse))
@@ -557,7 +557,7 @@ namespace cloud.charging.open.EV
         private async Task<HTTPResponse> PostNTSSync(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.RunDiagnostics, true, out var user, out var refused))
+            if (!TryAuthorize(Request, Permission.Run (NodeResources.NTS), true, out var user, out var refused))
                 return refused;
 
             Log.Info($"'{user.Id}' asked this vehicle to synchronise its time.", "nts", "test", "web");
@@ -593,7 +593,7 @@ namespace cloud.charging.open.EV
         private async Task<HTTPResponse> PostNTSTest(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.RunDiagnostics, true, out var user, out var refused))
+            if (!TryAuthorize(Request, Permission.Run (NodeResources.NTS), true, out var user, out var refused))
                 return refused;
 
             if (!TryParseJSONObject(Request, out var json, out var errorResponse))
@@ -623,7 +623,7 @@ namespace cloud.charging.open.EV
         private Task<HTTPResponse> GetVehicleConfiguration(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.ReadConfiguration, false, out _, out var refused))
+            if (!TryAuthorize(Request, Permission.Read(VehicleAccess.Vehicle), false, out _, out var refused))
                 return Task.FromResult(refused);
 
             return Task.FromResult(
@@ -640,7 +640,7 @@ namespace cloud.charging.open.EV
         private Task<HTTPResponse> PutVehicleConfiguration(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.ChangeChargingSettings, true, out _, out var refused))
+            if (!TryAuthorize(Request, Permission.Edit(VehicleAccess.Vehicle), true, out _, out var refused))
                 return Task.FromResult(refused);
 
             if (!TryParseJSONObject(Request, out var json, out var errorResponse))
@@ -666,7 +666,7 @@ namespace cloud.charging.open.EV
         private Task<HTTPResponse> GetV2GConfiguration(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.ReadConfiguration, false, out _, out var refused))
+            if (!TryAuthorize(Request, Permission.Read(VehicleAccess.V2G), false, out _, out var refused))
                 return Task.FromResult(refused);
 
             return Task.FromResult(
@@ -687,7 +687,7 @@ namespace cloud.charging.open.EV
         private Task<HTTPResponse> PutV2GConfiguration(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.ChangeNetworkSettings, true, out _, out var refused))
+            if (!TryAuthorize(Request, Permission.Edit(VehicleAccess.V2G), true, out _, out var refused))
                 return Task.FromResult(refused);
 
             if (!TryParseJSONObject(Request, out var json, out var errorResponse))
@@ -730,7 +730,7 @@ namespace cloud.charging.open.EV
         private async Task<HTTPResponse> PostV2GDiscover(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.RunDiagnostics, true, out var user, out var refused))
+            if (!TryAuthorize(Request, Permission.Run (VehicleAccess.V2G), true, out var user, out var refused))
                 return refused;
 
             if (!TryParseJSONObject(Request, out var json, out var errorResponse))
@@ -768,7 +768,7 @@ namespace cloud.charging.open.EV
         private Task<HTTPResponse> GetSessionConfiguration(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.ReadConfiguration, false, out _, out var refused))
+            if (!TryAuthorize(Request, Permission.Read(VehicleAccess.Session), false, out _, out var refused))
                 return Task.FromResult(refused);
 
             return Task.FromResult(
@@ -823,12 +823,13 @@ namespace cloud.charging.open.EV
         /// At the reading permission: what certificates a vehicle holds is not
         /// a secret from anybody who may look at it at all, and the private
         /// keys are not in the answer. Changing any of it needs
-        /// <see cref="Permissions.ManageCredentials"/>.
+        /// "certificates:edit", which only the administrators have unless the
+        /// configuration file says otherwise.
         /// </remarks>
         private Task<HTTPResponse> GetCertificates(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.ReadConfiguration, false, out _, out var refused))
+            if (!TryAuthorize(Request, Permission.Read(NodeResources.Certificates), false, out _, out var refused))
                 return Task.FromResult(refused);
 
             return Task.FromResult(
@@ -857,7 +858,7 @@ namespace cloud.charging.open.EV
         private Task<HTTPResponse> PostCertificate(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.ManageCredentials, true, out _, out var refused))
+            if (!TryAuthorize(Request, Permission.Edit(NodeResources.Certificates), true, out _, out var refused))
                 return Task.FromResult(refused);
 
             if (!TryParseJSONObject(Request, out var json, out var errorResponse))
@@ -925,7 +926,7 @@ namespace cloud.charging.open.EV
         private Task<HTTPResponse> GetCertificate(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.ReadConfiguration, false, out _, out var refused))
+            if (!TryAuthorize(Request, Permission.Read(NodeResources.Certificates), false, out _, out var refused))
                 return Task.FromResult(refused);
 
             var entry = Vehicle.Certificates.Get(HandleOf(Request));
@@ -950,7 +951,7 @@ namespace cloud.charging.open.EV
         private Task<HTTPResponse> PatchCertificate(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.ManageCredentials, true, out _, out var refused))
+            if (!TryAuthorize(Request, Permission.Edit(NodeResources.Certificates), true, out _, out var refused))
                 return Task.FromResult(refused);
 
             if (!TryParseJSONObject(Request, out var json, out var errorResponse))
@@ -1003,7 +1004,7 @@ namespace cloud.charging.open.EV
         private Task<HTTPResponse> DeleteCertificate(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.ManageCredentials, true, out _, out var refused))
+            if (!TryAuthorize(Request, Permission.Edit(NodeResources.Certificates), true, out _, out var refused))
                 return Task.FromResult(refused);
 
             var handle = HandleOf(Request);
@@ -1042,7 +1043,7 @@ namespace cloud.charging.open.EV
         private Task<HTTPResponse> PostCertificateReload(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.ManageCredentials, true, out _, out var refused))
+            if (!TryAuthorize(Request, Permission.Edit(NodeResources.Certificates), true, out _, out var refused))
                 return Task.FromResult(refused);
 
             Vehicle.Certificates.Reload();
@@ -1086,31 +1087,33 @@ namespace cloud.charging.open.EV
         /// Every field the request does not mention costs nothing, so a page
         /// that offers one card asks for one permission.
         /// </remarks>
-        private static Permissions PermissionsForSession(JObject JSON)
+        private static IReadOnlyList<Permission> PermissionsForSession(JObject JSON)
         {
 
-            var required = Permissions.None;
+            var required = new List<Permission>();
 
-            foreach (var field in new[] { "pkiDirectory", "vehicleCertificate",
-                                          "contractCertificate", "oemCertificate", "tariffCertificate" })
-                if (JSON.ContainsKey(field))
-                    required |= Permissions.ManageCredentials;
+            // Which certificate the vehicle is known by is a decision about
+            // who it is, and asked as one: the certificates' own.
+            if (new[] { "pkiDirectory", "vehicleCertificate", "contractCertificate",
+                        "oemCertificate", "tariffCertificate" }.Any(JSON.ContainsKey))
+                required.Add(Permission.Edit(NodeResources.Certificates));
 
-            foreach (var field in new[] { "connect", "protocol", "mode", "tls", "slacPeer",
-                                          "t1sBus", "t1sTransport", "t1sInterface", "t1sWeight", "renegotiate" })
-                if (JSON.ContainsKey(field))
-                    required |= Permissions.ChangeNetworkSettings;
+            // Which interface and which protocol is a statement about the
+            // link, and asked as one.
+            if (new[] { "connect", "protocol", "mode", "tls", "slacPeer",
+                        "t1sBus", "t1sTransport", "t1sInterface", "t1sWeight", "renegotiate" }.Any(JSON.ContainsKey))
+                required.Add(Permission.Edit(VehicleAccess.V2G));
 
-            foreach (var field in new[] { "targetEnergyKWh", "maxChargingTimeSeconds",
-                                          "departureInSeconds", "minimumStateOfChargePercent" })
-                if (JSON.ContainsKey(field))
-                    required |= Permissions.ChangeChargingSettings;
+            if (new[] { "targetEnergyKWh", "maxChargingTimeSeconds",
+                        "departureInSeconds", "minimumStateOfChargePercent" }.Any(JSON.ContainsKey))
+                required.Add(Permission.Edit(VehicleAccess.Session));
 
             // An empty request changes nothing and is answered as a read, which
             // is what it is.
-            return required == Permissions.None
-                       ? Permissions.ReadConfiguration
-                       : required;
+            if (required.Count == 0)
+                required.Add(Permission.Read(VehicleAccess.Session));
+
+            return required;
 
         }
 
@@ -1140,7 +1143,7 @@ namespace cloud.charging.open.EV
         private async Task<HTTPResponse> PostSessionStart(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.RunSessions, true, out var user, out var refused))
+            if (!TryAuthorize(Request, Permission.Run (VehicleAccess.Session), true, out var user, out var refused))
                 return refused;
 
             if (!TryParseJSONObject(Request, out var json, out var errorResponse))
@@ -1209,7 +1212,7 @@ namespace cloud.charging.open.EV
         private Task<HTTPResponse> PostSessionStop(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.RunSessions, true, out var user, out var refused))
+            if (!TryAuthorize(Request, Permission.Run (VehicleAccess.Session), true, out var user, out var refused))
                 return Task.FromResult(refused);
 
             if (!Vehicle.SessionRunning)
@@ -1247,7 +1250,7 @@ namespace cloud.charging.open.EV
         private async Task<HTTPResponse> PostSLACPair(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.RunDiagnostics, true, out var user, out var refused))
+            if (!TryAuthorize(Request, Permission.Run (VehicleAccess.V2G), true, out var user, out var refused))
                 return refused;
 
             if (Vehicle.SessionSettings.SLACPeer is null)
@@ -1708,11 +1711,11 @@ namespace cloud.charging.open.EV
 
         #endregion
 
-        #region (private) TryAuthorize(Request, Required, StateChanging, out Session, out Refused)
+        #region (private) TryAuthorize(Request, Required, StateChanging, out User, out Refused)
 
         /// <summary>
-        /// The live session behind the request, when it is allowed to do this -
-        /// or the response that says why not.
+        /// The account behind the request, when it is allowed to do this - or
+        /// the response that says why not.
         /// </summary>
         /// <remarks>
         /// Three refusals, in the order they have to happen: a request from
@@ -1722,14 +1725,37 @@ namespace cloud.charging.open.EV
         /// the permission they are short of and the roles that carry it. The
         /// difference between the last two matters to a browser: 401 means sign
         /// in again, 403 means signing in again will not help.
+        ///
+        /// What the account may do is the node's to answer - see
+        /// <see cref="WWCPNode.IsAllowed(IUser, IEnumerable{Permission})"/> -
+        /// so that a role in the configuration file means here what it means
+        /// on every other node.
         /// </remarks>
         /// <param name="Request">The request.</param>
         /// <param name="Required">What this request needs permission to do.</param>
         /// <param name="StateChanging">Whether it changes something, and is therefore also checked for being cross-site.</param>
-        /// <param name="Session">The session behind it.</param>
+        /// <param name="User">The account behind it.</param>
         /// <param name="Refused">The response to send instead.</param>
         private Boolean TryAuthorize(HTTPRequest                             Request,
-                                     Permissions                             Required,
+                                     Permission                              Required,
+                                     Boolean                                 StateChanging,
+                                     [NotNullWhen(true)]  out IUser?         User,
+                                     [NotNullWhen(false)] out HTTPResponse?  Refused)
+
+            => TryAuthorize(Request, [ Required ], StateChanging, out User, out Refused);
+
+
+        /// <summary>
+        /// The account behind the request, when it is allowed to do all of this
+        /// - or the response that says why not.
+        /// </summary>
+        /// <remarks>
+        /// All of it or nothing: a change that is several kinds at once needs
+        /// every one of them, each carried by whichever role of the account
+        /// carries it.
+        /// </remarks>
+        private Boolean TryAuthorize(HTTPRequest                             Request,
+                                     IReadOnlyCollection<Permission>         Required,
                                      Boolean                                 StateChanging,
                                      [NotNullWhen(true)]  out IUser?         User,
                                      [NotNullWhen(false)] out HTTPResponse?  Refused)
@@ -1746,9 +1772,7 @@ namespace cloud.charging.open.EV
             if (!TryGetUser(Request, out User, out Refused))
                 return false;
 
-            var permissions = PermissionsOf(User);
-
-            if (!permissions.HasFlag(Required))
+            if (!Vehicle.IsAllowed(User, Required))
             {
                 Refused  = RefusePermission(Request, User, Required, null);
                 User     = null;
@@ -1762,11 +1786,11 @@ namespace cloud.charging.open.EV
 
         #endregion
 
-        #region (private) RefusePermission(Request, Session, Required, Because)
+        #region (private) RefusePermission(Request, User, Required, Because)
 
         /// <summary>
         /// The 403 for somebody signed in who may not do this, naming the roles
-        /// that carry the permission they are short of.
+        /// that carry what they are short of.
         /// </summary>
         /// <remarks>
         /// Its own method because it is needed twice: once before a request is
@@ -1776,20 +1800,20 @@ namespace cloud.charging.open.EV
         /// and both leave the same line in the log.
         /// </remarks>
         /// <param name="Because">What it was about this particular request, when the route alone does not say.</param>
-        private HTTPResponse RefusePermission(HTTPRequest  Request,
-                                              IUser        User,
-                                              Permissions  Required,
-                                              String?      Because)
+        private HTTPResponse RefusePermission(HTTPRequest                      Request,
+                                              IUser                            User,
+                                              IReadOnlyCollection<Permission>  Required,
+                                              String?                          Because)
         {
 
-            // HasFlag with more than one flag asks for all of them, which is
-            // what a role has to carry to do a change that was several kinds at
-            // once. Nobody is named who could only do half of it.
-            var allowed = UserRole.All.Where(role => role.Permissions.HasFlag(Required)).
-                                       Select(role => role.Name);
+            // Only roles that could do all of it on their own: nobody is named
+            // who could only do half of it. The administrators can always do
+            // all of it, so the sentence never runs out of roles.
+            var allowed = Vehicle.Access.RolesAllowing(Required).
+                                         Select(role => role.Name);
 
             Log.Warning(
-                $"'{User.Id}' was refused {Required} on {Request.HTTPMethod} {Request.Path}; " +
+                $"'{User.Id}' was refused {String.Join(", ", Required)} on {Request.HTTPMethod} {Request.Path}; " +
                 $"signed in as {String.Join(", ", RolesOf(User).Select(role => role.Name))}." +
                 (Because is null ? "" : $" {Because}"),
                 "web", "auth"
@@ -1903,7 +1927,7 @@ namespace cloud.charging.open.EV
             => new (
                    new JProperty("username",     User.Id.ToString()),
                    new JProperty("roles",        new JArray(RolesOf(User).Select(role => role.Name))),
-                   new JProperty("permissions",  new JArray(PermissionsOf(User).Names()))
+                   new JProperty("permissions",  new JArray(Vehicle.PermissionsOf(User).Select(permission => permission.ToString())))
                );
 
         #endregion
@@ -1933,34 +1957,15 @@ namespace cloud.charging.open.EV
 
         #endregion
 
-        #region (private) RolesOf(User) / PermissionsOf(User)
+        #region (private) RolesOf(User)
 
         /// <summary>
-        /// The roles this account holds: one per group of that name it is in.
+        /// The roles this account holds: one per group of that name it is in -
+        /// see <see cref="WWCPNode.RolesOf(IUser)"/>.
         /// </summary>
-        /// <remarks>
-        /// Asked of the groups on every request rather than remembered at
-        /// sign-in, so that taking somebody out of a group takes effect on
-        /// their next request instead of at their next sign-in. A role revoked
-        /// that still works until a browser is closed is not revoked.
-        /// </remarks>
-        private IEnumerable<UserRole> RolesOf(IUser User)
+        private IReadOnlyList<Role> RolesOf(IUser User)
 
-              // IsMember compares the account by identification, which is what
-              // makes this safe to ask with whatever instance authenticated the
-              // request: a cookie brings one rebuilt from what the cookie holds
-              // rather than the one the membership was made with. It compared by
-              // reference until 2026-09-18, and the same account then came out as
-              // systemadmin through Basic auth and as nobody through a cookie.
-            => UserRole.All.Where(role => ExtAPI.IsMember(User, role.GroupId));
-
-        /// <summary>
-        /// Everything those roles add up to, or nothing at all when the account
-        /// is in none of the groups.
-        /// </summary>
-        private Permissions PermissionsOf(IUser User)
-
-            => RolesOf(User).PermissionsOf();
+            => Vehicle.RolesOf(User);
 
         #endregion
 

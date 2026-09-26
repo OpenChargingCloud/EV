@@ -41,7 +41,7 @@ export const vehiclePage: Page = {
                 void load();
         });
 
-        const mayChange = auth.can('changeChargingSettings');
+        const mayChange = auth.can('vehicle', 'edit');
 
         let cancelled = false;
         let current: VehicleConfiguration | null = null;

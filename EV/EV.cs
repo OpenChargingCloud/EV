@@ -222,6 +222,8 @@ namespace cloud.charging.open.EV
                    HTTPRootPath:       HTTPRootPath,
                    ExtAPI:             ExtAPI,
                    AccountsPath:       AccountsPath,
+                   Resources:          VehicleAccess.Resources,
+                   RoleDefinitions:    VehicleAccess.Roles,
                    ConfigFile:         ConfigFile,
                    DNSClient:          DNSClient,
                    NTSClient:          NTSClient,

@@ -31,7 +31,6 @@ using cloud.charging.open.protocols.ISO15118.T1S.Transport;
 using cloud.charging.open.EV.ISO15118;
 using cloud.charging.open.EV.Configuration;
 using cloud.charging.open.protocols.WWCP.Node;
-using cloud.charging.open.protocols.WWCP.Node.Web;
 using cloud.charging.open.protocols.WWCP.Node.Certificates;
 
 #endregion
@@ -52,8 +51,8 @@ namespace cloud.charging.open.EV
     /// one - it says so loudly, and a restart makes it true.
     ///
     /// Nothing here decides who may call it. That is the API's business, and it
-    /// asks before it calls: see the permissions in
-    /// <see cref="Web.UserRole"/>.
+    /// asks the node before it calls: see <see cref="VehicleAccess"/> for the
+    /// resources and roles of a vehicle.
     /// </remarks>
     public partial class EV
     {
@@ -252,8 +251,9 @@ namespace cloud.charging.open.EV
         /// <remarks>
         /// Nothing here starts one. Changing the interface a vehicle would
         /// broadcast on is a setting; broadcasting is an act, and the two are
-        /// deliberately different requests under different permissions - see
-        /// <see cref="Web.Permissions.RunDiagnostics"/>.
+        /// deliberately different requests under different permissions:
+        /// "v2g:edit" for this, "v2g:run" for a discovery - see
+        /// <see cref="VehicleAccess.V2G"/>.
         /// </remarks>
         public Boolean TryUpdateV2GConfiguration(JObject                           JSON,
                                                  [NotNullWhen(false)] out String?  Error)

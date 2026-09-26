@@ -18,6 +18,7 @@ starts the thing; everything a vehicle *is* lives here.
 | `EV.cs` | the vehicle: what it adds to a node - its battery, its JSON API, and one SDP discovery at a time |
 | `EV.Session.cs` | charging: one session at a time, and the handle a pause leaves behind |
 | `EV.Configuration.cs` | what the Configuration pages read and write of the vehicle's own - the battery, the link, the certificates, the session |
+| `VehicleAccess.cs` | who may do what: the vehicle's resources - `vehicle`, `v2g`, `session` - and its driver and its service |
 | `HTTPAPI/EVHTTPAPI.cs` | the JSON API at `/api`, and the Server-Sent Events stream everything travels on |
 | `ISO15118/V2GLink.cs` | the wire below the charging cable: which interfaces could carry it, SLAC, the 10BASE-T1S bus of an MCS coupler, and the SDP client |
 | `ISO15118/V2GSession.cs` | one session, from the TCP connection to `SessionStop` |
@@ -96,6 +97,29 @@ event stream can answer. The result that comes back at the end is the sum.
 Which is also why `POST /api/v1/session` answers *before* the session is over.
 A request held open for a full charge is a request that times out; the vehicle
 says it has started, and the session resource carries the result when it ends.
+
+
+## Who may do what
+
+Four roles, when the configuration file says nothing else, and what each may
+do is an operation - `read`, `edit` or `run` - on a resource: the node's
+`configuration`, `dns`, `nts` and `certificates`, and the vehicle's
+`vehicle`, `v2g` and `session`.
+
+| Role | may |
+|---|---|
+| `viewer` | read everything |
+| `driver` | read everything; ask a name server, a time server or the link something; change what the battery wants and what a session asks for; charge |
+| `service` | everything the driver may, and change where the vehicle resolves names, reads the time and finds a station |
+| `systemadmin` | everything, the certificates included |
+
+`viewer` and `systemadmin` are the node's, the other two are in
+`VehicleAccess.cs`. The certificates are the one resource nobody but the
+administrators may edit, which includes choosing the ones a session uses:
+somebody who can add a root can make this vehicle believe a station nobody
+else would. The configuration file may add roles and say differently what
+one of them may do - see
+[WWCP_Node's README](https://github.com/OpenChargingCloud/WWCP_Node#who-may-sign-in).
 
 
 ## Certificates, and where they live

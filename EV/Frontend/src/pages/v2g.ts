@@ -50,8 +50,8 @@ export const v2gPage: Page = {
                 void load();
         });
 
-        const mayChange = auth.can('changeNetworkSettings');
-        const mayLook   = auth.can('runDiagnostics');
+        const mayChange = auth.can('v2g', 'edit');
+        const mayLook   = auth.can('v2g', 'run');
 
         let cancelled  = false;
         let current: V2GConfiguration | null = null;

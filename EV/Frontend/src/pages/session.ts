@@ -53,10 +53,10 @@ export const sessionPage: Page = {
                 void load();
         });
 
-        const mayCharge      = auth.can('runSessions');
-        const mayChangeLink  = auth.can('changeNetworkSettings');
-        const mayChangeGoals = auth.can('changeChargingSettings');
-        const mayChangeCerts = auth.can('manageCredentials');
+        const mayCharge      = auth.can('session', 'run');
+        const mayChangeLink  = auth.can('v2g', 'edit');
+        const mayChangeGoals = auth.can('session', 'edit');
+        const mayChangeCerts = auth.can('certificates', 'edit');
 
         let cancelled = false;
         let current: SessionConfiguration | null = null;

@@ -53,7 +53,7 @@ export const certificatesPage: Page = {
 
         must<HTMLButtonElement>(root, '#reload').addEventListener('click', () => { void load(); });
 
-        const mayChange = auth.can('manageCredentials');
+        const mayChange = auth.can('certificates', 'edit');
 
         let cancelled = false;
         let current: CertificateStore | null = null;
