@@ -839,8 +839,8 @@ namespace cloud.charging.open.EV
         }
 
         /// <summary>
-        /// POST /api/v1/certificates with {"kind", "content", "password", "label"}:
-        /// put a certificate into the store.
+        /// POST /api/v1/certificates with {"kind", "content", "password", "label",
+        /// "usages"}: put a certificate into the store.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -853,6 +853,10 @@ namespace cloud.charging.open.EV
         /// Answered with 200 rather than 201 when the certificate was already
         /// there. Importing the same file twice is the same entry - the id is
         /// its fingerprint - so the second import created nothing.
+        /// </para>
+        /// <para>
+        /// <c>usages</c> says what a TLS root or a server certificate is for -
+        /// ["dns", "nts"] - and is left out, or null, for every use.
         /// </para>
         /// </remarks>
         private Task<HTTPResponse> PostCertificate(HTTPRequest Request)
@@ -892,12 +896,16 @@ namespace cloud.charging.open.EV
                        );
             }
 
+            if (!TryReadUsages(json, out var usages, out var usagesError))
+                return Task.FromResult(ErrorJSON(Request, HTTPStatusCode.BadRequest, usagesError));
+
             var existed = Vehicle.Certificates.Entries.Count;
 
             if (!Vehicle.Certificates.Import(bytes,
                                              kind,
                                              json.Value<String>("password"),
                                              json.Value<String>("label"),
+                                             usages,
                                              out var entry,
                                              out var error))
             {
@@ -940,13 +948,15 @@ namespace cloud.charging.open.EV
         }
 
         /// <summary>
-        /// PATCH /api/v1/certificates/{id} with {"active"} and/or {"label"}:
-        /// switch a certificate on or off, or rename it.
+        /// PATCH /api/v1/certificates/{id} with {"active"}, {"label"} and/or
+        /// {"usages"}: switch a certificate on or off, rename it, or say what
+        /// it is for.
         /// </summary>
         /// <remarks>
-        /// Two things in one request because they are the only two things about
-        /// a stored certificate that can be changed at all - everything else
-        /// about it is read out of the file and is not somebody's to edit.
+        /// Three things in one request because they are the only three things
+        /// about a stored certificate that can be changed at all - everything
+        /// else about it is read out of the file and is not somebody's to edit.
+        /// "usages" set to null is every use again; left out, it is left alone.
         /// </remarks>
         private Task<HTTPResponse> PatchCertificate(HTTPRequest Request)
         {
@@ -980,6 +990,18 @@ namespace cloud.charging.open.EV
 
                 if (!Vehicle.Certificates.SetActive(handle, active.Value<Boolean>(), out _, out var activeError))
                     return Task.FromResult(ErrorJSON(Request, HTTPStatusCode.BadRequest, activeError));
+
+            }
+
+            // Present, even as null, is something to set: null is every use.
+            if (json.ContainsKey("usages"))
+            {
+
+                if (!TryReadUsages(json, out var usages, out var usagesError))
+                    return Task.FromResult(ErrorJSON(Request, HTTPStatusCode.BadRequest, usagesError));
+
+                if (!Vehicle.Certificates.SetUsages(handle, usages, out _, out var usagesRefused))
+                    return Task.FromResult(ErrorJSON(Request, HTTPStatusCode.BadRequest, usagesRefused));
 
             }
 
@@ -1051,6 +1073,40 @@ namespace cloud.charging.open.EV
             return Task.FromResult(
                        JSONResponse(Request, HTTPStatusCode.OK, Vehicle.CertificatesJSON())
                    );
+
+        }
+
+        #endregion
+
+        #region (private static) TryReadUsages(JSON, out Usages, out Error)
+
+        /// <summary>
+        /// The "usages" of a request: absent or null for every use, or a list
+        /// of usages - or why not.
+        /// </summary>
+        /// <remarks>
+        /// Whether each of them is a usage the store knows is the store's to
+        /// say, and it says so in a sentence that names the ones it knows.
+        /// </remarks>
+        private static Boolean TryReadUsages(JObject                           JSON,
+                                             out IReadOnlyList<String>?        Usages,
+                                             [NotNullWhen(false)] out String?  Error)
+        {
+
+            Usages  = null;
+            Error   = null;
+
+            if (!JSON.TryGetValue("usages", out var token) || token.Type == JTokenType.Null)
+                return true;
+
+            if (token is not JArray array || array.Any(usage => usage.Type != JTokenType.String))
+            {
+                Error = "'usages' has to be a list of usages, such as [\"dns\", \"nts\"], or null for every use.";
+                return false;
+            }
+
+            Usages = [.. array.Select(usage => usage.Value<String>()!)];
+            return true;
 
         }
 

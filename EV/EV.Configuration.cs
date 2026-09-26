@@ -398,9 +398,13 @@ namespace cloud.charging.open.EV
         public JObject CertificatesJSON()
         {
 
+            // The kinds this store keeps, which for a vehicle are all of them:
+            // a page offering a kind the store refuses would be offering a
+            // refusal.
+            var kinds  = Certificates.Kinds;
             var byKind = new JObject();
 
-            foreach (var kind in CertificateKindExtensions.All)
+            foreach (var kind in kinds)
                 byKind.Add(kind.AsText(),
                            new JArray(Certificates.ByKind(kind).Select(entry => entry.ToJSON(WithDiagnostics: true))));
 
@@ -409,21 +413,27 @@ namespace cloud.charging.open.EV
                        new JProperty("directory",    Certificates.Directory),
 
                        new JProperty("trustAnchors", new JArray(
-                           CertificateKindExtensions.All.Where(kind =>  kind.IsTrustAnchor()).Select(kind => kind.AsText())
+                           kinds.Where(kind =>  kind.IsTrustAnchor()).Select(kind => kind.AsText())
                        )),
 
                        new JProperty("credentials",  new JArray(
-                           CertificateKindExtensions.All.Where(kind => !kind.IsTrustAnchor()).Select(kind => kind.AsText())
+                           kinds.Where(kind => !kind.IsTrustAnchor()).Select(kind => kind.AsText())
                        )),
 
                        new JProperty("kinds",        new JObject(
-                           CertificateKindExtensions.All.Select(kind =>
+                           kinds.Select(kind =>
                                new JProperty(kind.AsText(), new JObject(
                                    new JProperty("description",     kind.Describe()),
                                    new JProperty("trustAnchor",     kind.IsTrustAnchor()),
-                                   new JProperty("needsPrivateKey", kind.NeedsPrivateKey())
+                                   new JProperty("needsPrivateKey", kind.NeedsPrivateKey()),
+                                   new JProperty("hasUsages",       kind.HasUsages())
                                )))
                        )),
+
+                       // What a TLS root or a server certificate may be told it is
+                       // for, so that a page offers these and nothing the store
+                       // would refuse.
+                       new JProperty("usages",       new JArray(Certificates.Usages)),
 
                        new JProperty("certificates", byKind),
 
