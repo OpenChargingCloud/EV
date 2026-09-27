@@ -197,7 +197,11 @@ The whole list goes to the vehicle at every save, so every server goes with
 what it is held to, and the pages' `ntsServers.ts`, `dnsServers.ts` and
 `pins.ts` are where that is decided and tested: a list sent without the pins of
 the servers nobody touched would let go of them, the ones learned on first use
-included. A name server switched to a transport that shows no certificate lets
+included. And each server goes with what the page showed it held to, as
+`pinsAsShown`, so that the vehicle changes only what was changed on the page: a
+root a server learned while the page was open - the first key exchange or
+handshake after a save is seconds later - stays when the page saves something
+else. That is the pages' part until WWCP_Node's shared pages take it over. A name server switched to a transport that shows no certificate lets
 go of its pins when it is saved - the vehicle would refuse them - and its row
 says so first. Holding a server to a fingerprint is the service's, with the
 rest of the server: a pin cannot make the vehicle believe a certificate that
