@@ -42,6 +42,20 @@ describe('what a kind may be told it is for', () => {
 
     });
 
+    it('is the listeners for an identity where a kind of node names some - not the services a root vouches for', () => {
+
+        // The one case that tells what a kind says from what the store says
+        // once for all of them: in the vehicle's own store the two lists are
+        // the same, and the page that offered the store's list for every kind
+        // passed every other case here. Suggested by the charging station,
+        // whose meter-like kinds name listeners.
+        const meter = { usages: [ 'dns', 'nts' ],
+                        kinds:  { tlsIdentity: { description: '', trustAnchor: false, needsPrivateKey: true, hasUsages: true, usages: [ 'modbus', 'web' ] } } } as unknown as CertificateStore;
+
+        assert.deepEqual(usagesOf(meter, 'tlsIdentity'), [ 'modbus', 'web' ]);
+
+    });
+
     it('is nothing for a kind that is for what its kind says', () => {
 
         assert.deepEqual(usagesOf(store, 'v2gRoot'), []);
