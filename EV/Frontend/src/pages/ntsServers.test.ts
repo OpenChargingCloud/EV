@@ -8,10 +8,23 @@
  */
 
 import { strict as assert }  from 'node:assert';
+import { registerHooks }     from 'node:module';
 import { describe, it }      from 'node:test';
 
-import type { NTSTimeSource } from '../api/client';
-import { entryOf, nameTaken, readable, withServer, withoutServer } from './ntsServers.ts';
+import type { NTSTimeSource, ServerPins } from '../api/client';
+
+// The list is written for webpack, which does not want the extension in a
+// relative import, and it imports what a server is held to from pins.ts; Node
+// wants the extension. One hook puts it back - see the client's test.
+registerHooks({
+    resolve(specifier, context, next) {
+        return specifier.startsWith('.') && !specifier.endsWith('.ts')
+                   ? next(`${specifier}.ts`, context)
+                   : next(specifier, context);
+    }
+});
+
+const { entryOf, nameTaken, readable, withServer, withoutServer } = await import('./ntsServers.ts');
 
 
 const usual = { ntsKE: 4460, ntp: 123 };
@@ -19,6 +32,15 @@ const usual = { ntsKE: 4460, ntp: 123 };
 /** A server as the vehicle shows it. */
 const shown = (hostname: string, more: Partial<NTSTimeSource> = {}): NTSTimeSource =>
     ({ hostname, priority: 0, ntsKEPort: 4460, ntpPort: 123, enabled: true, ...more });
+
+/** Two fingerprints, as the vehicle writes them. */
+const root         = 'a'.repeat(64);
+const certificate  = 'b'.repeat(64);
+const renewal      = 'c'.repeat(64);
+
+/** What the vehicle says a server is held to. */
+const heldTo = (more: Partial<ServerPins>): ServerPins =>
+    ({ certificate: null, root: null, certificates: [], roots: [], onMismatch: 'refuse', trustOnFirstUse: null, ...more });
 
 
 describe('a time server turned back into its entry', () => {
@@ -34,6 +56,54 @@ describe('a time server turned back into its entry', () => {
 
         assert.deepEqual(entryOf(shown('time.local.', { priority: 9, ntsKEPort: 4461, enabled: false }), usual),
                          { hostname: 'time.local', priority: 9, ntsKEPort: 4461, enabled: false });
+
+    });
+
+    it('keeps what it is held to - it went missing from every server whenever any one was saved', () => {
+
+        assert.deepEqual(entryOf(shown('ptbtime1.ptb.de.', { heldTo: heldTo({ root, roots: [ root ], onMismatch: 'record' }) }), usual),
+                         { hostname: 'ptbtime1.ptb.de', rootFingerprint: root, onMismatch: 'record' });
+
+    });
+
+    it('keeps a root it learned on first use, and that it learns', () => {
+
+        assert.deepEqual(entryOf(shown('ptbtime1.ptb.de.', { heldTo: heldTo({ root, roots: [ root ], trustOnFirstUse: 'root' }) }), usual),
+                         { hostname: 'ptbtime1.ptb.de', rootFingerprint: root, trustOnFirstUse: 'root' });
+
+    });
+
+    it('keeps several certificates as a list, the way the file writes them', () => {
+
+        assert.deepEqual(entryOf(shown('time.local.', { heldTo: heldTo({ certificate, certificates: [ certificate, renewal ] }) }), usual),
+                         { hostname: 'time.local', certificateFingerprints: [ certificate, renewal ] });
+
+    });
+
+    it('says nothing of pins where the vehicle says it is held to nothing', () => {
+
+        assert.deepEqual(entryOf(shown('ptbtime1.ptb.de.', { heldTo: null }), usual),
+                         { hostname: 'ptbtime1.ptb.de' });
+
+    });
+
+});
+
+
+describe('the list a change of one server sends', () => {
+
+    it('still holds every other server to what it was held to', () => {
+
+        const sources  = [ shown('ptbtime1.ptb.de.', { heldTo: heldTo({ root, roots: [ root ], trustOnFirstUse: 'root' }) }),
+                           shown('ptbtime2.ptb.de.', { heldTo: heldTo({ certificate, certificates: [ certificate ] }) }) ];
+        const list     = sources.map(source => entryOf(source, usual));
+
+        assert.deepEqual(withServer(list, 1, { ...list[1], priority: 1 }),
+                         [ { hostname: 'ptbtime1.ptb.de', rootFingerprint: root, trustOnFirstUse: 'root' },
+                           { hostname: 'ptbtime2.ptb.de', certificateFingerprint: certificate, priority: 1 } ]);
+
+        assert.deepEqual(withoutServer(list, 1),
+                         [ { hostname: 'ptbtime1.ptb.de', rootFingerprint: root, trustOnFirstUse: 'root' } ]);
 
     });
 

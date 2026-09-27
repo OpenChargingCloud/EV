@@ -1,4 +1,5 @@
 import type { NTSServerEntry, NTSTimeSource } from '../api/client';
+import { draftOf, withPins } from './pins';
 
 /**
  * The list of time servers as the NTS page edits it.
@@ -35,6 +36,12 @@ export function readable(hostname: string): string {
  * sent: an entry carrying the usual ports and priority 0 becomes an object in
  * the file where a bare name was, and the file stops reading the way somebody
  * would have written it.
+ *
+ * What it is held to goes with it. The vehicle is told the whole list, and an
+ * entry without its pins is a server let go of them: every server's, whenever
+ * any one of them was added, changed or deleted - the ones it learned the
+ * first time it was believed included, which nobody typed and nobody would
+ * miss until the server showed another certificate and was believed with it.
  */
 export function entryOf(source: NTSTimeSource, usual: UsualPorts): NTSServerEntry {
 
@@ -45,7 +52,7 @@ export function entryOf(source: NTSTimeSource, usual: UsualPorts): NTSServerEntr
     if (source.ntpPort   !== usual.ntp)    entry.ntpPort    = source.ntpPort;
     if (!source.enabled)                   entry.enabled    = false;
 
-    return entry;
+    return withPins(entry, draftOf(source.heldTo));
 
 }
 

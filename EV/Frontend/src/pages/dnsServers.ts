@@ -1,13 +1,56 @@
-import type { DNSConfiguration } from '../api/client';
+import type { DNSConfiguration, DNSServerEntry } from '../api/client';
+import { pinsIn, withPins } from './pins';
 
 /**
- * How long the DNS page waits for the vehicle to look something up.
+ * How long the DNS page waits for the vehicle to look something up, and what
+ * it tells the vehicle about a name server.
  *
- * Apart from the page, because this is the part that decides when the page
- * stops believing in the vehicle - and it was wrong in a way nobody sees until
- * a name server does not answer: it added the servers' timeouts up, as if the
- * vehicle asked them one after another, when it asks all of them at once.
+ * Apart from the page, because these are the parts that decide when the page
+ * stops believing in the vehicle and what the vehicle is told - and the first
+ * was wrong in a way nobody sees until a name server does not answer: it added
+ * the servers' timeouts up, as if the vehicle asked them one after another,
+ * when it asks all of them at once.
  */
+
+
+/**
+ * Whether a name server asked over this transport shows a certificate: over
+ * TLS and over HTTPS, in all its forms, and over nothing else.
+ */
+export function isEncrypted(transport: string): boolean {
+
+    const name = transport.toUpperCase();
+
+    return name === 'TLS' || name.startsWith('HTTPS');
+
+}
+
+
+/**
+ * A name server as the vehicle is told it: what its configuration keeps, in
+ * the order the file keeps it, and none of what the vehicle only says about it
+ * - what was made of its certificate, what it was last believed with.
+ *
+ * What it is held to only where it is asked over TLS or HTTPS. The vehicle
+ * refuses a pin on a server that shows no certificate, rightly: somebody would
+ * believe it held to something it is never compared with. So a server switched
+ * to UDP lets go of its pins when it is saved - which the page says before -
+ * and keeps them in the draft until then, for whoever switches it back.
+ */
+export function entryOf(server: DNSServerEntry): DNSServerEntry {
+
+    const entry: DNSServerEntry = {
+        address:              server.address,
+        port:                 server.port,
+        transport:            server.transport,
+        queryTimeoutSeconds:  server.queryTimeoutSeconds
+    };
+
+    return isEncrypted(server.transport)
+               ? withPins(entry, pinsIn(server))
+               : entry;
+
+}
 
 
 /**

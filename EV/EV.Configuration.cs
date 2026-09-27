@@ -386,11 +386,12 @@ namespace cloud.charging.open.EV
         /// Everything in this vehicle's certificate store, grouped the way it is shown.
         /// </summary>
         /// <remarks>
-        /// Two groups and not one list. The roots are what this vehicle <i>believes</i>: any number of each
+        /// Groups and not one list. The roots are what this vehicle <i>believes</i>: any number of each
         /// kind may be on at once, and none of them is ever chosen for a session. The credentials are what
         /// it <i>presents</i>: exactly one of each is chosen, and that choice is a session setting rather
         /// than a property of the store. A page that put them in one table would have to explain that
-        /// difference in a column heading.
+        /// difference in a column heading. The server certificates are neither: what it <i>recognises</i>,
+        /// kept for a time server or a name server to be held to by its fingerprint.
         ///
         /// Which handle each kind of credential is currently chosen by is answered here as well, so that
         /// the page can mark it without also fetching the session settings.
@@ -417,7 +418,15 @@ namespace cloud.charging.open.EV
                        )),
 
                        new JProperty("credentials",  new JArray(
-                           kinds.Where(kind => !kind.IsTrustAnchor()).Select(kind => kind.AsText())
+                           kinds.Where(kind => !kind.IsTrustAnchor() && !kind.MustNotCarryPrivateKey()).Select(kind => kind.AsText())
+                       )),
+
+                       // Neither believed nor presented, and never with a key: a
+                       // server certificate, kept to recognise a server by. Shown
+                       // among what the vehicle presents, it read as something the
+                       // vehicle would present.
+                       new JProperty("recognised",   new JArray(
+                           kinds.Where(kind => !kind.IsTrustAnchor() &&  kind.MustNotCarryPrivateKey()).Select(kind => kind.AsText())
                        )),
 
                        new JProperty("kinds",        new JObject(

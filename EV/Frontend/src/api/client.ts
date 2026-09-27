@@ -92,13 +92,98 @@ export interface Configuration {
 }
 
 
-/** One name server this vehicle asks. */
-export interface DNSServer {
+/** What a certificate other than the one a server is held to comes to. */
+export type PinMismatch = 'refuse' | 'record' | 'accept';
+
+/** What a server is held to from the first time it is believed. */
+export type TrustOnFirstUse = 'root' | 'certificate';
+
+/**
+ * What one server is held to beyond what every server is held to, as the
+ * vehicle reads it back: the certificates it may show and the roots its chain
+ * may end at - any one of them - what a mismatch comes to, and what it learns
+ * the first time it is believed. Every fingerprint is a SHA-256 one, in the
+ * 64 lower-case digits the vehicle keeps.
+ */
+export interface ServerPins {
+    /** The first certificate and root once more, as they were read when there could be only one of each. */
+    certificate:      string | null;
+    root:             string | null;
+    certificates:     string[];
+    roots:            string[];
+    onMismatch:       PinMismatch;
+    trustOnFirstUse:  TrustOnFirstUse | null;
+}
+
+/**
+ * What a server is held to, in the keys its entry is written with: one of a
+ * kind under the singular key, several under the plural - the way the
+ * configuration file says it, and the way the vehicle takes it back.
+ */
+export interface PinKeys {
+    certificateFingerprint?:   string;
+    certificateFingerprints?:  string[];
+    rootFingerprint?:          string;
+    rootFingerprints?:         string[];
+    onMismatch?:               PinMismatch;
+    trustOnFirstUse?:          TrustOnFirstUse;
+}
+
+/** What a server was last believed with - pinned or not, another one is noticed. */
+export interface KnownServer {
+    certificate:  string;
+    root:         string | null;
+    since:        string;
+}
+
+/** What the vehicle made of a server's certificate, in one word. */
+export type JudgementOutcome = 'accepted' | 'recorded' | 'tolerated'
+                             | 'pinMismatch' | 'untrusted' | 'wrongName' | 'noCertificate';
+
+/** What the vehicle made of the certificate a server showed, the last time it showed one. */
+export interface ServerJudgement {
+    server:       string;
+    service:      string;
+    at:           string;
+    /** Whether the server was used: "recorded" and "tolerated" are, although a fingerprint did not match. */
+    accepted:     boolean;
+    outcome:      JudgementOutcome;
+    certificate:  string | null;
+    root:         string | null;
+    /** The vehicle's own root it was validated by, where this machine knows none. */
+    anchoredBy:   string | null;
+    heldTo:       Pick<ServerPins, 'certificate' | 'root' | 'certificates' | 'roots'> | null;
+    /** What it was held to from this connection on, trusted on first use. */
+    learned:      TrustOnFirstUse | null;
+    /** What it had been believed with before, where this was another certificate. */
+    previously:   KnownServer | null;
+    /** Only in the answer to a test: what was found, one step after another. */
+    steps?:       { level: 'info' | 'notice' | 'warning' | 'error'; text: string }[];
+}
+
+
+/**
+ * One name server as the vehicle is told it: what its configuration keeps,
+ * with what it is held to where it is asked over TLS or HTTPS.
+ */
+export interface DNSServerEntry extends PinKeys {
     /** An IP address or a host name. */
     address:              string;
     port:                 number;
     transport:            string;
     queryTimeoutSeconds:  number | null;
+}
+
+/**
+ * One name server this vehicle asks, and what the vehicle says about it: what
+ * it is held to once more, the way the NTS answer has it, what was made of its
+ * certificate last, and what it was last believed with. Those three are read
+ * and never sent back.
+ */
+export interface DNSServer extends DNSServerEntry {
+    heldTo?:     ServerPins | null;
+    judgement?:  ServerJudgement | null;
+    known?:      KnownServer | null;
 }
 
 /** What may be changed about the name resolution while the vehicle runs. */
@@ -132,7 +217,7 @@ export interface DNSConfiguration {
 /** What a PUT to the DNS configuration may carry; everything is optional. */
 export interface DNSUpdate {
     enabled?:              boolean;
-    servers?:              DNSServer[];
+    servers?:              DNSServerEntry[];
     queryTimeoutSeconds?:  number;
     recursionDesired?:     boolean | null;
     useCache?:             boolean;
@@ -169,6 +254,8 @@ export interface DNSQueryResult {
     timedOut?:      boolean;
     answers:        DNSRecord[];
     more?:          number;
+    /** What was made of the certificate of every server this asked over TLS or HTTPS, step by step. */
+    certificates?:  ServerJudgement[];
 }
 
 
@@ -203,9 +290,9 @@ export interface NTSUpdate {
 
 /**
  * One time server as the configuration names it. Whatever is left out is the
- * usual: priority 0, the usual ports, switched on.
+ * usual: priority 0, the usual ports, switched on, held to no fingerprint.
  */
-export interface NTSServerEntry {
+export interface NTSServerEntry extends PinKeys {
     hostname:    string;
     priority?:   number;
     ntsKEPort?:  number;
@@ -269,6 +356,12 @@ export interface NTSTimeSource {
      * or null before the first exchange.
      */
     rootCA?:        NTSRootCA | null;
+
+    /** The SHA-256 fingerprint of the certificate the last key exchange showed, which a pin is written down from. */
+    certificate?:   string | null;
+    heldTo?:        ServerPins | null;
+    judgement?:     ServerJudgement | null;
+    known?:         KnownServer | null;
 }
 
 /** A root CA, by a name to call it, its subject, and its SHA-256 fingerprint. */
@@ -547,6 +640,12 @@ export interface Certificate {
     /** Active, and inside its own validity. */
     usable:         boolean;
     description:    string;
+    /**
+     * What it may be used for - "dns", "nts" - where its kind is kept for
+     * some uses and not others, and null there for every use. Left out for
+     * every other kind, which is for what its kind says.
+     */
+    usages?:        string[] | null;
 }
 
 /** What one of the session's certificate slots is set to, resolved against the store. */
@@ -567,11 +666,17 @@ export interface CertificateStore {
     trustAnchors:  CertificateKind[];
     /** The kinds that are presented, in the order they are shown. */
     credentials:   CertificateKind[];
+    /** The kinds that are neither: kept to recognise a server by its fingerprint. */
+    recognised?:   CertificateKind[];
     kinds:         Record<CertificateKind, {
                        description:     string;
                        trustAnchor:     boolean;
                        needsPrivateKey: boolean;
+                       /** Whether one of this kind is told what it is for. */
+                       hasUsages?:      boolean;
                    }>;
+    /** What a certificate of a kind that has usages may be told it is for. */
+    usages?:       string[];
     certificates:  Record<CertificateKind, Certificate[]>;
     /** Which handle each session slot currently names. */
     chosen: {
@@ -593,12 +698,16 @@ export interface CertificateImport {
     password?:  string;
     /** What to call it; its common name where this is left out. */
     label?:     string;
+    /** What it is for, where its kind has usages; left out for every use. */
+    usages?:    string[];
 }
 
 /** What a change to a stored certificate may say. Everything else is read from the file. */
 export interface CertificateUpdate {
     active?:  boolean;
     label?:   string | null;
+    /** What it is for; null for every use again, and left out to leave it alone. */
+    usages?:  string[] | null;
 }
 
 /** What this vehicle does once it has found a station. */

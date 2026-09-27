@@ -184,6 +184,11 @@ namespace cloud.charging.open.EV.Tests
                 Assert.That(store["certificates"]!["tlsRoot"]![0]!["usages"]!.Values<String>(),  Is.EqualTo(new[] { "nts" }));
                 Assert.That(store["certificates"]!["v2gRoot"]!.Children().Any(),      Is.False);
 
+                Assert.That(store["trustAnchors"]!.Values<String>(),                  Does.Contain("tlsRoot"));
+                Assert.That(store["recognised"]!.Values<String>(),                    Is.EqualTo(new[] { "tlsServer" }),
+                            "a server certificate is recognised, neither believed nor presented");
+                Assert.That(store["credentials"]!.Values<String>(),                   Does.Not.Contain("tlsServer").And.Contain("tlsIdentity"));
+
             });
 
         }

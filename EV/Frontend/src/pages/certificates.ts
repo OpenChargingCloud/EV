@@ -19,8 +19,20 @@ const largestImport = 1024 * 1024;
 const expiringSoon = 30;
 
 
+/** What a usage is called on this page: the service, in the words of the pages it is set on. */
+const usageNames: Record<string, string> = {
+    dns:  'name servers (DNS)',
+    nts:  'time servers (NTS)'
+};
+
+function usageName(usage: string): string {
+    return usageNames[usage] ?? usage;
+}
+
+
 /**
- * Everything this vehicle believes and everything it presents.
+ * Everything this vehicle believes, everything it presents, and the servers
+ * it recognises.
  *
  * Two groups, and the difference between them is the whole shape of this page.
  * A **root** is what this vehicle believes: any number of each kind may be on
@@ -28,7 +40,13 @@ const expiringSoon = 30;
  * changes what chains are accepted from the next session onwards. A
  * **credential** is what this vehicle presents: it is chosen - exactly one per
  * role - and that choice is a session setting, which is why it is made on the
- * Charging page and only shown here.
+ * Charging page and only shown here. Beside them the **server certificates**,
+ * which are neither: kept so that a time server or a name server can be held
+ * to one of them by its fingerprint, on the NTS and the DNS page.
+ *
+ * A TLS root and a server certificate are told what they are for - the time
+ * servers, the name servers, or every use - when they are uploaded, and can
+ * be told again: a root uploaded for the name servers vouches for no time.
  *
  * Certificates arrive two ways and both are first class. "Import" uploads a
  * file and copies it in; "Re-read the directory" picks up whatever somebody put
@@ -45,7 +63,7 @@ export const certificatesPage: Page = {
         const content = shell(root, {
             active:    '/configuration/certificates',
             title:     'Certificates',
-            subtitle:  'The roots this vehicle believes, and the certificates it presents.',
+            subtitle:  'The roots this vehicle believes, the certificates it presents, and the servers it recognises.',
             actions:   html`<button type="button" id="reload" class="btn small">Reload</button>`
         });
 
@@ -79,9 +97,9 @@ export const certificatesPage: Page = {
                     <h2><i class="fa-solid fa-certificate"></i> The store</h2>
                     <p class="hint">
                         One file per certificate below <code>${store.directory}</code>, with
-                        <code>index.json</code> beside them recording what each one is called and whether it is
-                        switched on. Certificates already in that directory are read again at every start, so
-                        copying one in is a way to install it.
+                        <code>index.json</code> beside them recording what each one is called, whether it is
+                        switched on and what it is kept for. Certificates already in that directory are read again
+                        at every start, so copying one in is a way to install it.
                     </p>
                     <div class="form-actions">
                         <button type="button" id="rescan" class="btn" ${mayChange && !busy ? '' : html`disabled`}>
@@ -110,9 +128,53 @@ export const certificatesPage: Page = {
                 </p>
                 ${store.credentials.map(kind => kindCard(kind))}
 
+                ${(store.recognised ?? []).length === 0 ? '' : html`
+                    <h2>What this vehicle recognises</h2>
+                    <p class="hint">
+                        Neither believed nor presented: the certificates of servers this vehicle connects to,
+                        kept so that a time server or a name server can be held to one of them by its fingerprint -
+                        on the <a href="/configuration/nts">NTS</a> and the <a href="/configuration/dns">DNS</a>
+                        page, where each server's dialog offers the ones kept for it.
+                    </p>
+                    ${(store.recognised ?? []).map(kind => kindCard(kind))}
+                `}
+
             `);
 
             wire();
+
+        }
+
+
+        /** The kinds in the order the page shows them, which is the order the import offers them in. */
+        function kindsShown(): CertificateKind[] {
+            const store = current!;
+            return [ ...store.trustAnchors, ...store.credentials, ...(store.recognised ?? []) ];
+        }
+
+        /** Whether a certificate of this kind is told what it is for. */
+        function hasUsages(kind: CertificateKind): boolean {
+            return current?.kinds[kind]?.hasUsages === true;
+        }
+
+        /**
+         * The boxes that say what a certificate is for, one per usage the
+         * vehicle knows - none ticked for every use, which is what a
+         * certificate kept before there were usages is as well, and what the
+         * vehicle would refuse to be told as an empty list.
+         */
+        function usagesFields(ticked: readonly string[] | null | undefined) {
+
+            return html`
+                ${(current!.usages ?? []).map(usage => html`
+                    <label class="checkbox">
+                        <input type="checkbox" name="usage" value="${usage}"
+                               ${ticked?.includes(usage) ? html`checked` : ''} ${busy ? html`disabled` : ''} />
+                        ${usageName(usage)}
+                    </label>
+                `)}
+                <span class="hint">None ticked: for every use.</span>
+            `;
 
         }
 
@@ -121,6 +183,7 @@ export const certificatesPage: Page = {
         function importCard() {
 
             const store = current!;
+            const first = kindsShown()[0];
 
             return html`
                 <section class="card">
@@ -140,11 +203,16 @@ export const certificatesPage: Page = {
 
                         <label>What it is for
                             <select name="kind" id="import-kind" ${busy ? html`disabled` : ''}>
-                                ${[...store.trustAnchors, ...store.credentials].map(kind => html`
+                                ${kindsShown().map(kind => html`
                                     <option value="${kind}">${store.kinds[kind].description}</option>
                                 `)}
                             </select>
                         </label>
+
+                        <fieldset class="usages" id="import-usages" ${first !== undefined && hasUsages(first) ? '' : html`hidden`}>
+                            <legend>What it is kept for</legend>
+                            ${usagesFields(null)}
+                        </fieldset>
 
                         <label>What opens it, if it is a protected PKCS#12
                             <input type="password" name="password" autocomplete="off" ${busy ? html`disabled` : ''} />
@@ -228,6 +296,13 @@ export const certificatesPage: Page = {
                         ${entry.label}
                         ${inUse ? html`<span class="chip on">chosen</span>` : ''}
                         <br /><code class="muted" title="SHA-256: ${entry.thumbprint}">${entry.id}</code>
+                        ${hasUsages(entry.kind)
+                              ? html`<br /><span class="chips usages-of">
+                                         ${entry.usages === null || entry.usages === undefined
+                                               ? html`<span class="chip">for every use</span>`
+                                               : entry.usages.map(usage => html`<span class="chip">${usageName(usage)}</span>`)}
+                                     </span>`
+                              : ''}
                     </td>
                     <td>
                         ${entry.subject}
@@ -248,6 +323,12 @@ export const certificatesPage: Page = {
                                 ${mayChange && !busy ? '' : html`disabled`}>
                             Rename
                         </button>
+                        ${hasUsages(entry.kind)
+                              ? html`<button type="button" class="btn small" data-usages="${entry.id}"
+                                             ${mayChange && !busy ? '' : html`disabled`}>
+                                         Uses
+                                     </button>`
+                              : ''}
                         <button type="button" class="btn small danger" data-remove="${entry.id}"
                                 ${mayChange && !busy ? '' : html`disabled`}>
                             Delete
@@ -281,6 +362,15 @@ export const certificatesPage: Page = {
                 event.preventDefault();
                 void doImport(form);
             });
+
+            // What it is kept for is asked only of the kinds that are told it.
+            content.querySelector<HTMLSelectElement>('#import-kind')?.addEventListener('change', event => {
+                must<HTMLElement>(content, '#import-usages').hidden =
+                    !hasUsages((event.target as HTMLSelectElement).value as CertificateKind);
+            });
+
+            for (const button of content.querySelectorAll<HTMLButtonElement>('[data-usages]'))
+                button.addEventListener('click', () => { editUsages(button.dataset.usages!); });
 
             for (const button of content.querySelectorAll<HTMLButtonElement>('[data-toggle]'))
                 button.addEventListener('click', () => { void toggle(button.dataset.toggle!); });
@@ -316,8 +406,10 @@ export const certificatesPage: Page = {
             }
 
             const data     = new FormData(form);
+            const kind     = data.get('kind') as CertificateKind;
             const password = String(data.get('password') ?? '');
             const label    = String(data.get('label')    ?? '').trim();
+            const usages   = hasUsages(kind) ? data.getAll('usage').map(String) : [];
 
             busy = true;
 
@@ -325,10 +417,13 @@ export const certificatesPage: Page = {
             {
 
                 const imported = await whileSaving(content, note, async () => api.certificates.import({
-                                           kind:     data.get('kind') as CertificateKind,
+                                           kind,
                                            content:  await base64Of(chosen),
                                            password: password.length > 0 ? password : undefined,
-                                           label:    label.length    > 0 ? label    : undefined
+                                           label:    label.length    > 0 ? label    : undefined,
+                                           // Left out for every use; the vehicle
+                                           // refuses a certificate for no use.
+                                           usages:   usages.length   > 0 ? usages   : undefined
                                        }));
 
                 busy    = false;
@@ -380,6 +475,103 @@ export const certificatesPage: Page = {
                 return;
 
             await change(() => api.certificates.update(id, { label: given.trim().length > 0 ? given.trim() : null }));
+
+        }
+
+
+        /**
+         * Say again what a TLS root or a server certificate is for, in a
+         * dialog.
+         *
+         * A dialog with a Save rather than boxes in the row that save on every
+         * click: each change is a line in the metrological log, and taking the
+         * last tick away on the way to another one would have made the
+         * certificate one for every use in between.
+         */
+        function editUsages(id: string): void {
+
+            const entry = everything().find(one => one.id === id);
+
+            if (entry === undefined)
+                return;
+
+            const dialog = document.createElement('dialog');
+
+            dialog.className = 'test-dialog server-dialog';
+
+            document.body.appendChild(dialog);
+
+            /** Shut it and take it away - see the connections page for why both. */
+            const dismiss = (): void => { dialog.close(); dialog.remove(); };
+
+            render(dialog, html`
+
+                <h2><i class="fa-solid fa-certificate"></i> ${entry.label}</h2>
+
+                <form id="usages-form" class="form-stack">
+
+                    <fieldset class="usages">
+                        <legend>What it is kept for</legend>
+                        ${usagesFields(entry.usages)}
+                    </fieldset>
+
+                    <p class="hint">
+                        ${entry.kind === 'tlsRoot'
+                              ? html`A root kept for the time servers alone vouches for no name server, and the other
+                                     way round - except for a server whose own entry names it: naming it there says
+                                     the same, and more narrowly.`
+                              : html`Offered in the dialog of the servers it is kept for, on the NTS and the DNS page.`}
+                    </p>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn primary">Save</button>
+                        <button type="button" class="btn" id="usages-cancel">Cancel</button>
+                        <span id="usages-error" class="form-error" role="alert"></span>
+                    </div>
+
+                </form>
+
+            `);
+
+            const form = must<HTMLFormElement>(dialog, '#usages-form');
+
+            form.addEventListener('submit', event => {
+
+                event.preventDefault();
+
+                const ticked = new FormData(form).getAll('usage').map(String);
+
+                void (async () => {
+
+                    try
+                    {
+                        // None ticked is every use again, which the vehicle
+                        // is told as null: a list with nothing in it would be
+                        // a certificate for no use, and is refused.
+                        await whileSaving(dialog, null, () => api.certificates.update(id, { usages: ticked.length > 0 ? ticked : null }));
+                    }
+                    catch (problem)
+                    {
+                        must<HTMLElement>(dialog, '#usages-error').textContent = errorMessage(problem);
+                        return;
+                    }
+
+                    dismiss();
+
+                    // The store again rather than the one certificate the
+                    // answer carries, as after every other change on this page.
+                    await load();
+
+                })();
+
+            });
+
+            must<HTMLButtonElement>(dialog, '#usages-cancel').addEventListener('click', dismiss);
+
+            dialog.addEventListener('close',  dismiss);
+            dialog.addEventListener('cancel', dismiss);
+
+            dialog.showModal();
 
         }
 
