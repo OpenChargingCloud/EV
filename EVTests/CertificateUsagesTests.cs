@@ -181,6 +181,11 @@ namespace cloud.charging.open.EV.Tests
                 Assert.That(store["usages"]!.Values<String>(),                        Is.EqualTo(new[] { "dns", "nts" }), "what a page may offer");
                 Assert.That(store["kinds"]!["tlsRoot"]!["hasUsages"]!.Value<Boolean>(),  Is.True);
                 Assert.That(store["kinds"]!["v2gRoot"]!["hasUsages"]!.Value<Boolean>(),  Is.False);
+                Assert.That(store["kinds"]!["tlsRoot"]!["usages"]!.Values<String>(),     Is.EqualTo(new[] { "dns", "nts" }), "what a page may offer a root");
+                Assert.That(store["kinds"]!["tlsServer"]!["usages"]!.Values<String>(),   Is.EqualTo(new[] { "dns", "nts" }));
+                Assert.That(store["kinds"]!["tlsIdentity"]!["hasUsages"]!.Value<Boolean>(), Is.False,
+                            "a vehicle names no listener an identity could be told of, so a page offers it nothing - not the services a root vouches for");
+                Assert.That(store["kinds"]!["tlsIdentity"]!["usages"]!.Children().Any(),  Is.False);
                 Assert.That(store["certificates"]!["tlsRoot"]![0]!["usages"]!.Values<String>(),  Is.EqualTo(new[] { "nts" }));
                 Assert.That(store["certificates"]!["v2gRoot"]!.Children().Any(),      Is.False);
 
@@ -252,6 +257,14 @@ namespace cloud.charging.open.EV.Tests
                                                      new JProperty("usages",   "dns")
                                                  ));
 
+            // Refused before the file is read, so a root's file does for an
+            // identity here: what is wrong is what it was to be told.
+            var (identity, idSaid)  = await Send(HttpMethod.Post, "api/v1/certificates", new JObject(
+                                                     new JProperty("kind",     "tlsIdentity"),
+                                                     new JProperty("content",  RootPem("Not An Identity")),
+                                                     new JProperty("usages",   new JArray("dns"))
+                                                 ));
+
             var (_, store)          = await Send(HttpMethod.Get, "api/v1/certificates");
 
             Assert.Multiple(() => {
@@ -261,6 +274,8 @@ namespace cloud.charging.open.EV.Tests
                 Assert.That(v2gSaid.ToString(),            Does.Contain("only a TLS root and a server certificate"));
                 Assert.That(notAList,                      Is.EqualTo(HttpStatusCode.BadRequest));
                 Assert.That(listSaid.ToString(),           Does.Contain("has to be a list of usages"));
+                Assert.That(identity,                      Is.EqualTo(HttpStatusCode.BadRequest));
+                Assert.That(idSaid.ToString(),             Does.Contain("names none"), "an identity is told listeners, and a vehicle has none");
                 Assert.That(store["certificates"]!.Values().SelectMany(kind => kind.Children()).Any(),
                             Is.False,
                             "nothing refused was half-imported");

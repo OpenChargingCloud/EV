@@ -150,7 +150,9 @@ vehicle connects to shows, kept so that the server can be held to it by its
 fingerprint, and never with a private key, which would be that server's key in
 the wrong place. The Certificates page shows these as a third group, what the
 vehicle *recognises*. The store keeps the node's two other TLS kinds as well,
-`clientRoot` and `tlsIdentity`, which nothing in the vehicle uses yet.
+`clientRoot` and `tlsIdentity`, which nothing in the vehicle uses yet. An
+identity is told the listeners it is shown on where a kind of node names some;
+a vehicle names none, so the page offers an identity nothing to be told.
 
 A TLS root and a server certificate are told what they are for: the time
 servers (`nts`), the name servers (`dns`), or - with nothing said - every use.
