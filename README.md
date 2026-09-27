@@ -124,24 +124,40 @@ one of them may do - see
 
 ## Certificates, and where they live
 
-Everything this vehicle believes and everything it presents is in one store —
-WWCP_Node's `CertificateStore`, a directory of files with an `index.json`
-beside them — and is addressed by a short handle rather than by a path.
+Everything this vehicle believes, everything it presents and every server it
+recognises is in one store — WWCP_Node's `CertificateStore`, a directory of
+files with an `index.json` beside them — and is addressed by a short handle
+rather than by a path.
 
-Two groups, and they behave differently in every respect that matters. A
+Three groups, and they behave differently in every respect that matters. A
 **root** is what this vehicle believes: `v2gRoot` for the station's chain,
-`moRoot` for a contract's, `oemRoot` for a provisioning chain. Any number of
-each may be switched on at once, all of them are believed, and none is ever
-chosen for a session. Keeping the three apart is the point — one bag of roots
-would let an OEM root vouch for a contract, which is the difference between a
-vehicle that checks who is charging it and one that checks that somebody signed
-something.
+`moRoot` for a contract's, `oemRoot` for a provisioning chain, and `tlsRoot`
+for a server the vehicle connects to - a time server, or a name server over
+TLS or HTTPS - beside the roots of the machine it runs on. Any number of each
+may be switched on at once, all of them are believed, and none is ever chosen
+for a session. Keeping them apart is the point — one bag of roots would let an
+OEM root vouch for a contract, which is the difference between a vehicle that
+checks who is charging it and one that checks that somebody signed something.
 
 A **credential** is what this vehicle presents: the Vehicle certificate is who
 it is, the contract certificate is who pays, the OEM provisioning certificate
 is what it was born with, and the tariff certificate is what a station's signed
 tariff is checked against. Exactly one of each is chosen, and that choice is a
 session setting — `SessionConfiguration` carries the handle, never the file.
+
+A **server certificate** - `tlsServer` - is neither. It is what a server the
+vehicle connects to shows, kept so that the server can be held to it by its
+fingerprint, and never with a private key, which would be that server's key in
+the wrong place. The Certificates page shows these as a third group, what the
+vehicle *recognises*. The store keeps the node's two other TLS kinds as well,
+`clientRoot` and `tlsIdentity`, which nothing in the vehicle uses yet.
+
+A TLS root and a server certificate are told what they are for: the time
+servers (`nts`), the name servers (`dns`), or - with nothing said - every use.
+The Certificates page asks at the upload and again with **Uses**, because one
+root may vouch for both, and a root kept for the name servers alone vouches for
+no time. What a server is held to is said in its own entry, on the NTS and the
+DNS page - see below - where its dialog offers the ones kept for it.
 
 The store holds private keys **unencrypted**: a PKCS#12 is opened with its
 password once, at import, and written back without one, so that any number of
@@ -164,6 +180,27 @@ What the vehicle adds is the way in. Its DNS client and NTS client pages read
 and change the two sections through `/api/v1/configuration/dns` and
 `/api/v1/configuration/nts`, and ask a name server or a time server something
 from there; asking a time server measures the clock and never steps it.
+
+A time server, and a name server asked over TLS or HTTPS, can be held to a
+certificate or a root, and the pages are where that is said: a server's dialog
+takes SHA-256 fingerprints one to a line, adds the one the server showed last
+or one the certificate store keeps for it with a click, and says what a
+mismatch comes to and whether the server is held to what it is first believed
+with. Its row says what was made of its certificate the last time - believed,
+used although it did not match, or refused, and why - what it is held to, and
+when it showed another certificate than before. A lookup on the DNS page says
+the same of every certificate it met.
+
+The whole list goes to the vehicle at every save, so every server goes with
+what it is held to, and the pages' `ntsServers.ts`, `dnsServers.ts` and
+`pins.ts` are where that is decided and tested: a list sent without the pins of
+the servers nobody touched would let go of them, the ones learned on first use
+included. A name server switched to a transport that shows no certificate lets
+go of its pins when it is saved - the vehicle would refuse them - and its row
+says so first. Holding a server to a fingerprint is the service's, with the
+rest of the server: a pin cannot make the vehicle believe a certificate that
+chains to nothing this machine or its store holds, and what goes into the
+store stays the administrators'.
 `GET /api/v1/clock` serves the clock to anybody signed in, because a screen
 that shows the time has to be able to say what it is worth: the time, the
 group it is checked against, when it was last checked and how far off it was
