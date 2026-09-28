@@ -380,92 +380,51 @@ namespace cloud.charging.open.EV
 
         #region Certificates
 
-        #region CertificatesJSON()
+        #region (protected override) CompleteCertificatesJSON(JSON)
 
         /// <summary>
-        /// Everything in this vehicle's certificate store, grouped the way it is shown.
+        /// Which handle each kind of credential is chosen by for a session,
+        /// beside what every node says about its store - see
+        /// <see cref="WWCPNode.CertificatesJSON"/> - so that the page can mark
+        /// it without also fetching the session settings.
         /// </summary>
         /// <remarks>
-        /// Groups and not one list. The roots are what this vehicle <i>believes</i>: any number of each
-        /// kind may be on at once, and none of them is ever chosen for a session. The credentials are what
-        /// it <i>presents</i>: exactly one of each is chosen, and that choice is a session setting rather
-        /// than a property of the store. A page that put them in one table would have to explain that
-        /// difference in a column heading. The server certificates are neither: what it <i>recognises</i>,
-        /// kept for a time server or a name server to be held to by its fingerprint.
-        ///
-        /// Which handle each kind of credential is currently chosen by is answered here as well, so that
-        /// the page can mark it without also fetching the session settings.
+        /// The credentials are what a vehicle presents: exactly one of each is
+        /// chosen, and that choice is a session setting rather than a property
+        /// of the store.
         /// </remarks>
-        public JObject CertificatesJSON()
+        protected override void CompleteCertificatesJSON(JObject JSON)
         {
 
-            // The kinds this store keeps, which for a vehicle are all of them:
-            // a page offering a kind the store refuses would be offering a
-            // refusal.
-            var kinds  = Certificates.Kinds;
-            var byKind = new JObject();
-
-            foreach (var kind in kinds)
-                byKind.Add(kind.AsText(),
-                           new JArray(Certificates.ByKind(kind).Select(entry => entry.ToJSON(WithDiagnostics: true))));
-
-            return new JObject(
-
-                       new JProperty("directory",    Certificates.Directory),
-
-                       new JProperty("trustAnchors", new JArray(
-                           kinds.Where(kind =>  kind.IsTrustAnchor()).Select(kind => kind.AsText())
-                       )),
-
-                       new JProperty("credentials",  new JArray(
-                           kinds.Where(kind => !kind.IsTrustAnchor() && !kind.MustNotCarryPrivateKey()).Select(kind => kind.AsText())
-                       )),
-
-                       // Neither believed nor presented, and never with a key: a
-                       // server certificate, kept to recognise a server by. Shown
-                       // among what the vehicle presents, it read as something the
-                       // vehicle would present.
-                       new JProperty("recognised",   new JArray(
-                           kinds.Where(kind => !kind.IsTrustAnchor() &&  kind.MustNotCarryPrivateKey()).Select(kind => kind.AsText())
-                       )),
-
-                       new JProperty("kinds",        new JObject(
-                           kinds.Select(kind =>
-                               new JProperty(kind.AsText(), new JObject(
-                                   new JProperty("description",     kind.Describe()),
-                                   new JProperty("trustAnchor",     kind.IsTrustAnchor()),
-                                   new JProperty("needsPrivateKey", kind.NeedsPrivateKey()),
-                                   // Whether one of the kind is told what it is for
-                                   // in this store, and what it may be told - the
-                                   // store's word and not the kind's: a TLS identity
-                                   // is told the listeners a kind of node names, and
-                                   // a vehicle names none, so it is told nothing.
-                                   new JProperty("hasUsages",       Certificates.HasUsages(kind)),
-                                   new JProperty("usages",          new JArray(Certificates.UsagesFor(kind)))
-                               )))
-                       )),
-
-                       // What a TLS root or a server certificate may be told it is
-                       // for - the services it vouches for - as it was said before
-                       // every kind said its own above.
-                       new JProperty("usages",       new JArray(Certificates.Usages)),
-
-                       new JProperty("certificates", byKind),
-
-                       new JProperty("chosen",       new JObject(
-                           new JProperty("vehicleCertificate",   SessionSettings.VehicleCertificate),
-                           new JProperty("contractCertificate",  SessionSettings.ContractCertificate),
-                           new JProperty("oemCertificate",       SessionSettings.OEMCertificate),
-                           new JProperty("tariffCertificate",    SessionSettings.TariffCertificate)
-                       )),
-
-                       // Said here because this is the page where somebody is looking at the
-                       // consequences of it, rather than only in the log at a start.
-                       new JProperty("keysAreUnencrypted", Certificates.Entries.Any(entry => entry.HasPrivateKey))
-
-                   );
+            JSON["chosen"] = new JObject(
+                                 new JProperty("vehicleCertificate",   SessionSettings.VehicleCertificate),
+                                 new JProperty("contractCertificate",  SessionSettings.ContractCertificate),
+                                 new JProperty("oemCertificate",       SessionSettings.OEMCertificate),
+                                 new JProperty("tariffCertificate",    SessionSettings.TariffCertificate)
+                             );
 
         }
+
+        #endregion
+
+        #region (override) WhatUses(Handle)
+
+        /// <summary>
+        /// The session setting that names the certificate of this handle, as the
+        /// sentence a refusal to delete it says - or null where none does.
+        /// </summary>
+        /// <remarks>
+        /// Deleting it anyway would leave a vehicle configured to present
+        /// something that is not there, which is discovered at the next session
+        /// rather than here - and switching it off is what somebody taking a
+        /// certificate out of service usually meant.
+        /// </remarks>
+        public override String? WhatUses(String Handle)
+
+            => UsedBySession(Handle) is String field
+                   ? $"That certificate is what 'session.{field}' names. Choose another one there " +
+                      "first, or switch this one off instead of deleting it."
+                   : null;
 
         #endregion
 

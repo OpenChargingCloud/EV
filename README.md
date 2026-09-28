@@ -19,7 +19,7 @@ starts the thing; everything a vehicle *is* lives here.
 | `EV.Session.cs` | charging: one session at a time, and the handle a pause leaves behind |
 | `EV.Configuration.cs` | what the Configuration pages read and write of the vehicle's own - the battery, the link, the certificates, the session |
 | `VehicleAccess.cs` | who may do what: the vehicle's resources - `vehicle`, `v2g`, `session` - and its driver and its service |
-| `HTTPAPI/EVHTTPAPI.cs` | the JSON API at `/api`, and the Server-Sent Events stream everything travels on |
+| `HTTPAPI/EVHTTPAPI.cs` | what the vehicle adds to the JSON API every node answers at `/api` - its settings, V2G and the session; the rest, the Server-Sent Events stream everything travels on included, is WWCP_Node's `NodeHTTPAPI` |
 | `ISO15118/V2GLink.cs` | the wire below the charging cable: which interfaces could carry it, SLAC, the 10BASE-T1S bus of an MCS coupler, and the SDP client |
 | `ISO15118/V2GSession.cs` | one session, from the TCP connection to `SessionStop` |
 | `ISO15118/VehicleCredentials.cs` | the credentials a session was given, turned into the shapes it needs - and checked against the roots this vehicle believes |
@@ -31,8 +31,9 @@ configuration file, name resolution and the time, the certificate store, who
 may sign in, and the HTTP server all of that sits behind - is not here. That
 is [WWCP_Node](https://github.com/OpenChargingCloud/WWCP_Node), the part every
 one of these programs shares, and `EV` is one `WWCPNode` with a battery: its
-sections go into the same configuration file, and its JSON API below the
-node's `/api`.
+sections go into the same configuration file, and its routes into the JSON
+API every node has below `/api` - the node's `NodeHTTPAPI`, with the
+vehicle's settings, V2G and the session on top.
 
 
 ## The web interface is part of the assembly
@@ -126,8 +127,8 @@ every event it sends and at every heartbeat, whether whoever opened it would
 still be let in. Once the session it was opened with has ended - signed out,
 expired, or taken back with the account's others - the stream ends too, without
 the event, and the browser's next try is answered with a 401. One opened with
-an API key ends the same way once the key is revoked or has run out. One opened
-with Basic auth has neither, and is held to its account instead.
+an API key ends the same way once the key is revoked or has run out, and one
+opened with Basic auth once its password has changed.
 
 
 ## Certificates, and where they live
@@ -186,10 +187,11 @@ them is when the file says nothing, and how a group of time servers is asked,
 agreed on and held to its certificates is written down once, in
 [WWCP_Node's README](https://github.com/OpenChargingCloud/WWCP_Node#name-resolution-and-the-time).
 
-What the vehicle adds is the way in. Its DNS client and NTS client pages read
+What the vehicle adds is its pages. Its DNS client and NTS client pages read
 and change the two sections through `/api/v1/configuration/dns` and
-`/api/v1/configuration/nts`, and ask a name server or a time server something
-from there; asking a time server measures the clock and never steps it.
+`/api/v1/configuration/nts`, every node's routes, and ask a name server or a
+time server something from there; asking a time server measures the clock and
+never steps it.
 
 A time server, and a name server asked over TLS or HTTPS, can be held to a
 certificate or a root, and the pages are where that is said: a server's dialog
