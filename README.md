@@ -211,12 +211,14 @@ included. And each server goes with what the page showed it held to, as
 `pinsAsShown`, so that the vehicle changes only what was changed on the page: a
 root a server learned while the page was open - the first key exchange or
 handshake after a save is seconds later - stays when the page saves something
-else. That is the pages' part until WWCP_Node's shared pages take it over. A name server switched to a transport that shows no certificate lets
-go of its pins when it is saved - the vehicle would refuse them - and its row
-says so first. Holding a server to a fingerprint is the service's, with the
-rest of the server: a pin cannot make the vehicle believe a certificate that
-chains to nothing this machine or its store holds, and what goes into the
-store stays the administrators'.
+else. That is the pages' part until WWCP_Node's shared pages take it over. A
+name server switched to a transport that shows no certificate lets go of its
+pins when it is saved - the vehicle would refuse them - and its row says so
+first. Holding a server to a fingerprint is the service's, with the rest of the
+server: a pin cannot make the vehicle believe a certificate that chains to
+nothing this machine or its store holds, and what goes into the store stays the
+administrators'.
+
 `GET /api/v1/clock` serves the clock to anybody signed in, because a screen
 that shows the time has to be able to say what it is worth: the time, the
 group it is checked against, when it was last checked and how far off it was
