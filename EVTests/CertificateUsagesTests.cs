@@ -63,24 +63,20 @@ namespace cloud.charging.open.EV.Tests
 
             Directory.CreateDirectory(directory);
 
-            var port   = TestPorts.Free();
-
             var file   = Path.Combine(directory, WWCPConfigFile.DefaultFileName);
             File.WriteAllText(file, """{ "nts": { "enabled": false } }""");
 
-            vehicle    = new EV(
-                             HTTPPort:          IPPort.Parse(port),
+            vehicle    = await TestPorts.StartedOnFreshPorts(() => new EV(
+                             HTTPPort:          IPPort.Parse(TestPorts.Free()),
                              AccountsPath:      Path.Combine(directory, "accounts"),
                              ConfigFile:        new WWCPConfigFile(file),
                              CertificatesPath:  Path.Combine(directory, "certificates"),
                              LogToConsole:      false,
                              BridgeDebugLog:    false
-                         );
-
-            await vehicle.Start();
+                         ));
 
             client     = new HttpClient {
-                             BaseAddress  = new Uri($"http://127.0.0.1:{port}/"),
+                             BaseAddress  = new Uri($"http://127.0.0.1:{vehicle.HTTPPort}/"),
                              Timeout      = TimeSpan.FromSeconds(30)
                          };
 

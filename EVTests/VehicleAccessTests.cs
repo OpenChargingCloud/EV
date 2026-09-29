@@ -98,7 +98,9 @@ namespace cloud.charging.open.EV.Tests
 
         /// <summary>
         /// A vehicle with the given configuration file, on a free port of the
-        /// loopback - made, and not yet started.
+        /// loopback - made, and not yet started. Every call makes it this
+        /// test's vehicle: the one TestPorts.StartedOnFreshPorts made last is
+        /// the one signed in to, and the one the teardown lets go of.
         /// </summary>
         private EV Vehicle(String Configuration = NoTimeServers)
         {
@@ -288,7 +290,7 @@ namespace cloud.charging.open.EV.Tests
         public async Task ADriverMayLookAtTheDNSSettingsAndIsToldWhoMayChangeThem()
         {
 
-            await Vehicle().Start();
+            await TestPorts.StartedOnFreshPorts(() => Vehicle());
 
             using var driver  = await SignedInAs("driver1", "driver");
 
@@ -325,12 +327,12 @@ namespace cloud.charging.open.EV.Tests
         public async Task ARoleFromTheConfigurationFileIsHeardByTheAPI()
         {
 
-            await Vehicle("""
-                          {
-                            "nts":   { "enabled": false },
-                            "roles": { "support": [ "dns:read" ] }
-                          }
-                          """).Start();
+            await TestPorts.StartedOnFreshPorts(() => Vehicle("""
+                                                              {
+                                                                "nts":   { "enabled": false },
+                                                                "roles": { "support": [ "dns:read" ] }
+                                                              }
+                                                              """));
 
             using var support  = await SignedInAs("supporter", "support");
 
