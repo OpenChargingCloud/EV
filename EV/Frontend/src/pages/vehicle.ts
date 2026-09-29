@@ -3,7 +3,7 @@ import { auth } from '../auth';
 import { html, must, render } from '@node/html';
 import type { Page } from '@node/router';
 import { shell } from '@node/shell';
-import { errorMessage, whileSaving } from '@node/ui';
+import { errorMessage, numberField, whileSaving } from '@node/ui';
 import { typedSinceDrawn, unsaved } from '@node/unsaved';
 
 /**
@@ -180,14 +180,17 @@ export const vehiclePage: Page = {
 
                 event.preventDefault();
 
-                const data = new FormData(event.target as HTMLFormElement);
+                const form = event.target as HTMLFormElement;
 
+                // An emptied number is NaN here and null on the wire, which
+                // the vehicle reads as "not given": what it had stays - where
+                // Number() made it 0, which is a state of charge of 0 %.
                 void save('battery', {
-                    batteryCapacityKWh:          Number(data.get('batteryCapacityKWh')),
-                    stateOfChargePercent:        Number(data.get('stateOfChargePercent')),
-                    targetStateOfChargePercent:  Number(data.get('targetStateOfChargePercent')),
-                    maxChargingPowerKW:          Number(data.get('maxChargingPowerKW')),
-                    taperFromPercent:            Number(data.get('taperFromPercent'))
+                    batteryCapacityKWh:          numberField(form, 'batteryCapacityKWh'),
+                    stateOfChargePercent:        numberField(form, 'stateOfChargePercent'),
+                    targetStateOfChargePercent:  numberField(form, 'targetStateOfChargePercent'),
+                    maxChargingPowerKW:          numberField(form, 'maxChargingPowerKW'),
+                    taperFromPercent:            numberField(form, 'taperFromPercent')
                 });
 
             });

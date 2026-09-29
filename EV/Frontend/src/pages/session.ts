@@ -4,7 +4,7 @@ import { auth } from '../auth';
 import { html, must, render, type HTMLFragment } from '@node/html';
 import type { Page } from '@node/router';
 import { shell } from '@node/shell';
-import { errorMessage, formatValue, whileSaving } from '@node/ui';
+import { errorMessage, formatValue, numberField, whileSaving } from '@node/ui';
 import { typedSinceDrawn, unsaved } from '@node/unsaved';
 
 /**
@@ -91,10 +91,16 @@ export const sessionPage: Page = {
             // so it is offered as itself rather than quietly becoming "none".
             const missing = chosen !== null && chosen.missing;
 
+            // "(none)" says it is the one drawn where no other option is. Left
+            // to the browser, which picks the first option of a list nobody
+            // marked, it was chosen and not drawn - and an untouched page asked
+            // before it was left, whenever a slot was empty.
+            const marked  = missing || available.some(one => one.id === chosen?.id);
+
             return html`
                 <label>${label}
                     <select name="${field}" ${mayChangeCerts ? '' : html`disabled`}>
-                        <option value="">(none)</option>
+                        <option value="" ${marked ? '' : html`selected`}>(none)</option>
                         ${available.map(one => html`
                             <option value="${one.id}" ${chosen?.id === one.id ? html`selected` : ''}>
                                 ${describe(one)}
@@ -565,12 +571,13 @@ export const sessionPage: Page = {
 
                 event.preventDefault();
 
-                const data    = new FormData(event.target as HTMLFormElement);
+                const form    = event.target as HTMLFormElement;
+                const data    = new FormData(form);
                 const connect = String(data.get('connect')      ?? '').trim();
                 const peer    = String(data.get('slacPeer')     ?? '').trim();
                 const bus     = String(data.get('t1sBus')       ?? '').trim();
                 const nic     = String(data.get('t1sInterface') ?? '').trim();
-                const weight  = Number(data.get('t1sWeight'));
+                const weight  = numberField(form, 't1sWeight');
 
                 // An emptied field is a setting taken back, which the vehicle
                 // spells as an explicit null. Leaving it out of the request
@@ -759,7 +766,8 @@ export const sessionPage: Page = {
             }
         }
 
-        const release = unsaved.heldBy(() => typedSinceDrawn(content.querySelector('#link-form')) ||
+        const release = unsaved.heldBy(() => typedSinceDrawn(content.querySelector('#run-form')) ||
+                                             typedSinceDrawn(content.querySelector('#link-form')) ||
                                              typedSinceDrawn(content.querySelector('#goals-form')) ||
                                              typedSinceDrawn(content.querySelector('#certificates-form')));
 

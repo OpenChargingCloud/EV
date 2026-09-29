@@ -55,10 +55,12 @@ Certificates page, `api/client.ts` its routes, and `styles/app.scss` its
 colour. So a new WWCP_Node can change the vehicle's pages without a line
 changed here, which is why the build counts those files among its inputs.
 
-The vehicle's pages have no test of their own yet. `src/scaffolding.test.ts`
-holds the place until the first one comes - with `npm test`, `typecheck:test`
-and the CI step that runs them - and asks what that test will need: that
-`@node/...` is found from there, by the type check and by Node.
+The vehicle's own pages are held to what every page of every kind of node is:
+`src/pages/pages.test.ts` puts them under the rules of WWCP_Node's
+`test/pages.ts` - a page with a form says whether it holds a draft and holds
+every form it has, its Reload asks first, and it reads its numbers with
+`numberField`, so that an emptied field goes out as "not given" and not as a
+zero. `npm test` runs it, and the CI with it.
 
 `dotnet build -p:SkipFrontendBuild=true` leaves the npm step out and reuses
 whatever is already in `dist/` - or, where nothing is, builds a vehicle with no

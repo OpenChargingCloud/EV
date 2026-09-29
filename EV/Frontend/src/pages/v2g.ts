@@ -3,7 +3,7 @@ import { auth } from '../auth';
 import { html, must, render, type HTMLFragment } from '@node/html';
 import type { Page } from '@node/router';
 import { shell } from '@node/shell';
-import { errorMessage, formatValue, whileSaving } from '@node/ui';
+import { errorMessage, formatValue, numberField, whileSaving } from '@node/ui';
 import { typedSinceDrawn, unsaved } from '@node/unsaved';
 
 /**
@@ -404,13 +404,16 @@ export const v2gPage: Page = {
 
                 event.preventDefault();
 
-                const data = new FormData(event.target as HTMLFormElement);
+                const form = event.target as HTMLFormElement;
+                const data = new FormData(form);
 
+                // An emptied number is NaN here and null on the wire, which
+                // the vehicle reads as "not given": what it had stays.
                 void save('settings', {
                     requestedSecurity:            String(data.get('requestedSecurity') ?? 'tls') === 'noTls' ? 'noTls' : 'tls',
-                    perAttemptTimeoutSeconds:     Number(data.get('perAttemptTimeoutMs')) / 1000,
-                    maxRetries:                   Number(data.get('maxRetries')),
-                    totalDeadlineSeconds:         Number(data.get('totalDeadlineSeconds')),
+                    perAttemptTimeoutSeconds:     numberField(form, 'perAttemptTimeoutMs') / 1000,
+                    maxRetries:                   numberField(form, 'maxRetries'),
+                    totalDeadlineSeconds:         numberField(form, 'totalDeadlineSeconds'),
                     rejectNoTLSResponses:         data.get('rejectNoTLSResponses')        !== null,
                     requireLinkLocalSECCAddress:  data.get('requireLinkLocalSECCAddress') !== null,
                     multicastLoopback:            data.get('multicastLoopback')           !== null
