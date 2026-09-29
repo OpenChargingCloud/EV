@@ -26,9 +26,9 @@
   // the vehicle uses them.
   "include": [ "src/**/*.ts", "../../../WWCP_Node/Frontend/src/**/*.ts" ],
 
-  // The shared files' tests are WWCP_Node's to check and to run. The vehicle's
-  // pages have no tests of their own; with the first one comes back what reads
-  // them - a tsconfig.test.json and the "test" and "typecheck:test" scripts,
-  // as the local controller has them.
-  "exclude": [ "../../../WWCP_Node/Frontend/src/**/*.test.ts" ]
+  // The tests are read by Node rather than by webpack, and spell their imports
+  // the way Node wants them - with the extension - which ts-loader's own
+  // settings may not allow. They are checked by tsconfig.test.json instead;
+  // the shared files' tests are WWCP_Node's to run.
+  "exclude": [ "src/**/*.test.ts", "../../../WWCP_Node/Frontend/src/**/*.test.ts" ]
 }
