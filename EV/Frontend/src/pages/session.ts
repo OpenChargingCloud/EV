@@ -134,7 +134,26 @@ export const sessionPage: Page = {
         }
 
 
-        function draw(): void {
+        /**
+         * Whether one of the settings below the Charge card holds something
+         * typed and not yet saved.
+         */
+        function settingsHeld(): boolean {
+            return typedSinceDrawn(content.querySelector('#link-form'))  ||
+                   typedSinceDrawn(content.querySelector('#goals-form')) ||
+                   typedSinceDrawn(content.querySelector('#certificates-form'));
+        }
+
+        /**
+         * Draw the page from what the vehicle said last.
+         *
+         * @param Quietly  asked by the polling while a session runs. What a
+         *                 run changes is the Charge card, and only that is
+         *                 drawn again while a setting below it holds something
+         *                 typed: the whole page drawn every two seconds threw
+         *                 a half-typed goal away, unasked.
+         */
+        function draw(Quietly = false): void {
 
             if (current === null)
                 return;
@@ -145,7 +164,7 @@ export const sessionPage: Page = {
             const goals         = configuration.goals;
             const running       = configuration.running;
 
-            render(content, html`
+            const page = html`
 
                 ${mayCharge ? '' : html`
                     <div class="notice">
@@ -156,7 +175,7 @@ export const sessionPage: Page = {
 
                 <div class="cards">
 
-                    <section class="card wide">
+                    <section class="card wide" id="charge-card">
 
                         <h2><i class="fa-solid fa-bolt"></i> Charge</h2>
 
@@ -418,9 +437,21 @@ export const sessionPage: Page = {
 
                 </div>
 
-            `);
+            `;
 
-            wire();
+            const fresh = document.createElement('div');
+            const card  = content.querySelector('#charge-card');
+
+            if (Quietly && card !== null && settingsHeld()) {
+                render(fresh, page);
+                card.replaceWith(must<HTMLElement>(fresh, '#charge-card'));
+                wireCharge();
+            }
+
+            else {
+                render(content, page);
+                wire();
+            }
 
             // While a session runs, ask again: the exchange is on the event
             // stream but the sum is not, and the sum is what this page shows.
@@ -562,10 +593,15 @@ export const sessionPage: Page = {
         }
 
 
-        function wire(): void {
-
+        /** The Charge card's buttons, whenever the card is drawn. */
+        function wireCharge(): void {
             must<HTMLButtonElement>(content, '#charge').addEventListener('click', () => void charge());
             must<HTMLButtonElement>(content, '#stop').  addEventListener('click', () => void stop());
+        }
+
+        function wire(): void {
+
+            wireCharge();
 
             must<HTMLFormElement>(content, '#link-form').addEventListener('submit', event => {
 
@@ -739,7 +775,7 @@ export const sessionPage: Page = {
 
                 if (!cancelled) {
                     current = loaded;
-                    draw();
+                    draw(quietly);
                 }
             }
             catch (problem)
