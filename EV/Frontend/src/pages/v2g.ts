@@ -2,7 +2,7 @@ import { api, type DiscoveryResult, type SECC, type SlacResult, type V2GConfigur
 import { auth } from '../auth';
 import { html, must, render, type HTMLFragment } from '@node/html';
 import type { Page } from '@node/router';
-import { shell } from '../shell';
+import { shell } from '@node/shell';
 import { errorMessage, formatValue, whileSaving } from '@node/ui';
 import { typedSinceDrawn, unsaved } from '@node/unsaved';
 
