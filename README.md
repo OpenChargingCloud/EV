@@ -43,6 +43,13 @@ manifest resources named `cloud.charging.open.EV.HTTPRoot.*`, which is what
 Hermod's `EmbeddedContentSource` reads. So a build needs Node.js, and a
 deployment needs nothing but the DLL.
 
+Not everything in that bundle is the vehicle's. What the web interface of every
+kind of node shares - building HTML safely, the router, where the pages are
+mounted, and asking before a page's changes are left behind, in the name the
+node goes by - is WWCP_Node's, in its `Frontend/src`, and bundled in as
+`@node/...`. So a new WWCP_Node can change the vehicle's pages without a line
+changed here, which is why the build counts those files among its inputs.
+
 `dotnet build -p:SkipFrontendBuild=true` leaves the npm step out and reuses
 whatever is already in `dist/` - or, where nothing is, builds a vehicle with no
 web interface at all: a warning rather than an error, because "no Node on this

@@ -1,10 +1,10 @@
 import { api, type DiscoveryResult, type SECC, type SlacResult, type V2GConfiguration, type V2GUpdate } from '../api/client';
 import { auth } from '../auth';
-import { html, must, render, type HTMLFragment } from '../html';
-import type { Page } from '../router';
+import { html, must, render, type HTMLFragment } from '@node/html';
+import type { Page } from '@node/router';
 import { shell } from '../shell';
 import { errorMessage, formatValue, whileSaving } from '../ui';
-import { typedSinceDrawn, unsaved } from '../unsaved';
+import { typedSinceDrawn, unsaved } from '@node/unsaved';
 
 /**
  * How long this page waits on top of the deadline the vehicle was given.

@@ -1,10 +1,10 @@
 import { api, type VehicleConfiguration, type VehicleUpdate } from '../api/client';
 import { auth } from '../auth';
-import { html, must, render } from '../html';
-import type { Page } from '../router';
+import { html, must, render } from '@node/html';
+import type { Page } from '@node/router';
 import { shell } from '../shell';
 import { errorMessage, whileSaving } from '../ui';
-import { typedSinceDrawn, unsaved } from '../unsaved';
+import { typedSinceDrawn, unsaved } from '@node/unsaved';
 
 /**
  * What this vehicle is, and what its battery wants.

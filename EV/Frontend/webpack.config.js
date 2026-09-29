@@ -52,7 +52,15 @@ module.exports = (env, argv) => {
         },
 
         resolve: {
-            extensions: ['.ts', '.js']
+            extensions: ['.ts', '.js'],
+            // What every kind of node shares is imported as "@node/...": the
+            // files of WWCP_Node/Frontend/src, in the WWCP_Node next to this
+            // repository - in EVCLI's libs/, where EV.csproj finds
+            // ../../WWCP_Node too. They are bundled into this bundle like its
+            // own files; nothing is loaded from elsewhere.
+            alias: {
+                '@node': path.resolve(__dirname, '../../../WWCP_Node/Frontend/src')
+            }
         },
 
         module: {
