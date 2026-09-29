@@ -5,7 +5,7 @@ import { keepDrafts } from '../drafts';
 import { toURL } from '@node/basePath';
 import { html, must, render, type HTMLFragment } from '@node/html';
 import type { Page } from '@node/router';
-import { shell } from '@node/shell';
+import { mayButNot, shell } from '@node/shell';
 import { errorMessage, formatValue, numberField, whileSaving } from '@node/ui';
 import { typedSinceDrawn, unsaved } from '@node/unsaved';
 
@@ -170,8 +170,7 @@ export const sessionPage: Page = {
 
                 ${mayCharge ? '' : html`
                     <div class="notice">
-                        Signed in as ${auth.user?.roles.join(', ') ?? 'somebody'}, which may look at this page
-                        but not charge. That needs the driver, the service or the system administrator role.
+                        ${mayButNot('look at this page', 'charge')}
                     </div>
                 `}
 

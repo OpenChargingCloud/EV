@@ -60,7 +60,12 @@ The vehicle's own pages are held to what every page of every kind of node is:
 `test/pages.ts` - a page with a form says whether it holds a draft and holds
 every form it has, its Reload asks first, and it reads its numbers with
 `numberField`, so that an emptied field goes out as "not given" and not as a
-zero. `npm test` runs it, and the CI with it.
+zero. Its links go through `toURL`, so that they stay below the base the
+vehicle is mounted at; its look comes from the stylesheet, since a `style`
+attribute is dropped by the policy the pages are served with; and what somebody
+may not do, it says through `mayButNot`, which names no role as the one that is
+needed - which roles there are, and what each may, is the configuration file's
+to say. `npm test` runs it, and the CI with it.
 
 And where a page draws itself anew - after one of its forms is saved, or a
 discovery or a pairing has answered - what is typed into its other forms stays:

@@ -4,7 +4,7 @@ import { keepDrafts } from '../drafts';
 import { toURL } from '@node/basePath';
 import { html, must, render, type HTMLFragment } from '@node/html';
 import type { Page } from '@node/router';
-import { shell } from '@node/shell';
+import { mayButNot, shell } from '@node/shell';
 import { errorMessage, formatValue, numberField, whileSaving } from '@node/ui';
 import { typedSinceDrawn, unsaved } from '@node/unsaved';
 
@@ -53,7 +53,7 @@ export const v2gPage: Page = {
         });
 
         const mayChange = auth.can('v2g', 'edit');
-        const mayLook   = auth.can('v2g', 'run');
+        const mayRun    = auth.can('v2g', 'run');
 
         let cancelled  = false;
         let current: V2GConfiguration | null = null;
@@ -76,11 +76,9 @@ export const v2gPage: Page = {
 
             render(content, html`
 
-                ${mayLook ? '' : html`
+                ${mayRun ? '' : html`
                     <div class="notice">
-                        Signed in as ${auth.user?.roles.join(', ') ?? 'somebody'}, which may look at this page
-                        but not send anything on the link. That needs the driver, the service or the system
-                        administrator role.
+                        ${mayButNot('look at this page', 'send anything on the link')}
                     </div>
                 `}
 
@@ -91,7 +89,7 @@ export const v2gPage: Page = {
                         <h2><i class="fa-solid fa-tower-broadcast"></i> Look for a station</h2>
 
                         <div class="form-actions">
-                            <button type="button" id="discover" class="btn primary" ${mayLook && !searching ? '' : html`disabled`}>
+                            <button type="button" id="discover" class="btn primary" ${mayRun && !searching ? '' : html`disabled`}>
                                 ${searching ? 'Asking the link ...' : 'Look for a station'}
                             </button>
                             <span id="discover-error" class="form-error" role="alert"></span>
@@ -118,7 +116,7 @@ export const v2gPage: Page = {
                         <h2><i class="fa-solid fa-plug-circle-bolt"></i> Pair over SLAC</h2>
 
                         <div class="form-actions">
-                            <button type="button" id="pair" class="btn" ${mayLook && !pairing ? '' : html`disabled`}>
+                            <button type="button" id="pair" class="btn" ${mayRun && !pairing ? '' : html`disabled`}>
                                 ${pairing ? 'Sounding ...' : 'Pair over SLAC'}
                             </button>
                             <span id="pair-error" class="form-error" role="alert"></span>

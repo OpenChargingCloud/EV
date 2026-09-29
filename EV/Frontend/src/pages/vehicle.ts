@@ -3,7 +3,7 @@ import { auth } from '../auth';
 import { keepDrafts } from '../drafts';
 import { html, must, render } from '@node/html';
 import type { Page } from '@node/router';
-import { shell } from '@node/shell';
+import { mayButNot, shell } from '@node/shell';
 import { errorMessage, numberField, whileSaving } from '@node/ui';
 import { typedSinceDrawn, unsaved } from '@node/unsaved';
 
@@ -60,9 +60,7 @@ export const vehiclePage: Page = {
 
                 ${mayChange ? '' : html`
                     <div class="notice">
-                        Signed in as ${auth.user?.roles.join(', ') ?? 'somebody'}, which may look at this
-                        vehicle but not change it. That needs the driver, the service or the system
-                        administrator role.
+                        ${mayButNot('look at this vehicle', 'change it')}
                     </div>
                 `}
 
