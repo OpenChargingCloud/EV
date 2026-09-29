@@ -1,17 +1,8 @@
 // The web interface of an electric vehicle. What every node shows alike - the
-// frame, the forms, sign-in, logs, DNS, NTS, pins, the certificate store - is
-// WWCP_Node's, in the vehicle's colour; below it, what only the vehicle's own
-// pages need.
+// frame, the forms, sign-in, logs, DNS, NTS, pins, the certificate store, a
+// commit - is WWCP_Node's, in the vehicle's colour. What only the vehicle's
+// own pages need would go below it, and nothing does any more.
 @use '@node/styles/node' as * with (
     $color-accent:       #1b7f4d,
     $color-accent-dark:  #14633c
 );
-
-// A commit is forty characters that have to survive being copied out of here
-// and pasted into a checkout, so it is never shortened and never truncated -
-// it wraps instead. Monospaced because that is what makes two of them
-// comparable at a glance.
-.commit {
-    font-family:  ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    word-break:   break-all;
-}

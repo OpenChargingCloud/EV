@@ -420,9 +420,9 @@ namespace cloud.charging.open.EV
 
         /// <summary>
         /// What this vehicle is, as the Configuration page of the web
-        /// interface reads it: what the node below says of itself, and on top
-        /// the vehicle, its battery, its link and the assemblies it was built
-        /// from.
+        /// interface reads it: what the node below says of itself - the
+        /// repositories it was built from among it, each with its commit - and
+        /// on top the vehicle, its battery and its link.
         /// </summary>
         public override JObject ConfigurationJSON()
         {
@@ -453,45 +453,6 @@ namespace cloud.charging.open.EV
                          new JProperty("candidates",     new JArray(V2GLink.Candidates().Select(candidate => candidate.Name))),
                          new JProperty("lastDiscovery",  lastDiscovery)
                      )));
-
-            json.Add(new JProperty("assemblies", new JArray(
-                         BuiltFrom.Assemblies.Select(AssemblyJSON)
-                     )));
-
-            return json;
-
-        }
-
-        #endregion
-
-        #region (private static) AssemblyJSON(Assembly)
-
-        /// <summary>
-        /// One library of this vehicle, as the Configuration page reads it.
-        /// </summary>
-        /// <remarks>
-        /// Nothing is named here any more. What used to be four hand-written
-        /// lines is whatever BuiltFrom finds loaded, so a library that joins
-        /// this vehicle appears by itself and one that leaves stops being
-        /// claimed - which a hand-written list never manages for long.
-        ///
-        /// The label is the repository where there is one, because that is what
-        /// somebody looking at a bug report can check out; the assembly's own
-        /// name stays beside it for the libraries that carry no stamp yet.
-        /// </remarks>
-        private static JObject AssemblyJSON(LoadedAssembly Assembly)
-        {
-
-            var json = new JObject(
-                           new JProperty("name",      Assembly.Repository ?? Assembly.Name),
-                           new JProperty("assembly",  Assembly.Name),
-                           new JProperty("version",   Assembly.Version)
-                       );
-
-            // Only when it is known: an empty commit in a bug report reads like
-            // an answer, and it is not one.
-            if (Assembly.Commit is not null)
-                json.Add(new JProperty("commit", Assembly.Commit));
 
             return json;
 
