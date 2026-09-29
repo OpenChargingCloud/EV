@@ -58,7 +58,8 @@ changed here, which is why the build counts those files among its inputs.
 The vehicle's own pages are held to what every page of every kind of node is:
 `src/pages/pages.test.ts` puts them under the rules of WWCP_Node's
 `test/pages.ts` - a page with a form says whether it holds a draft and holds
-every form it has, its Reload asks first, and it reads its numbers with
+every form it has, its Reload asks first, it draws itself anew through
+`keepDrafts` and not with a second `draw()`, and it reads its numbers with
 `numberField`, so that an emptied field goes out as "not given" and not as a
 zero. Its links go through `toURL`, so that they stay below the base the
 vehicle is mounted at; its look comes from the stylesheet, since a `style`
@@ -69,8 +70,9 @@ to say. `npm test` runs it, and the CI with it.
 
 And where a page draws itself anew - after one of its forms is saved, or a
 discovery or a pairing has answered - what is typed into its other forms stays:
-`src/drafts.ts` puts it back, and its test says what it keeps and what it
-leaves as drawn.
+`keepDrafts` puts it back. It began on the vehicle's pages and is WWCP_Node's
+now, in its `drafts.ts`, for the pages of every kind of node, and so are the
+tests that say what it keeps and what it leaves as drawn.
 
 `dotnet build -p:SkipFrontendBuild=true` leaves the npm step out and reuses
 whatever is already in `dist/` - or, where nothing is, builds a vehicle with no

@@ -1,8 +1,8 @@
 import { api, type Certificate, type CertificateKind, type CertificateStore,
          type SessionBattery, type SessionConfiguration, type SessionRun, type SessionUpdate } from '../api/client';
 import { auth } from '../auth';
-import { keepDrafts } from '../drafts';
 import { toURL } from '@node/basePath';
+import { keepDrafts } from '@node/drafts';
 import { html, must, render, type HTMLFragment } from '@node/html';
 import type { Page } from '@node/router';
 import { mayButNot, shell } from '@node/shell';

@@ -1,6 +1,6 @@
 import { api, type VehicleConfiguration, type VehicleUpdate } from '../api/client';
 import { auth } from '../auth';
-import { keepDrafts } from '../drafts';
+import { keepDrafts } from '@node/drafts';
 import { html, must, render } from '@node/html';
 import type { Page } from '@node/router';
 import { mayButNot, shell } from '@node/shell';

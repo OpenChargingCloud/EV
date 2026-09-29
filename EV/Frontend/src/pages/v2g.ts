@@ -1,7 +1,7 @@
 import { api, type DiscoveryResult, type SECC, type SlacResult, type V2GConfiguration, type V2GUpdate } from '../api/client';
 import { auth } from '../auth';
-import { keepDrafts } from '../drafts';
 import { toURL } from '@node/basePath';
+import { keepDrafts } from '@node/drafts';
 import { html, must, render, type HTMLFragment } from '@node/html';
 import type { Page } from '@node/router';
 import { mayButNot, shell } from '@node/shell';
