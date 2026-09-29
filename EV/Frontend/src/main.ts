@@ -57,17 +57,21 @@ startNode({
 
     },
 
-    // A vehicle's roots are not only a server's: the station's chain, a
-    // contract's and a provisioning chain are checked against them too. And
-    // what it presents is chosen for a session, on the Charging page.
+    // What a vehicle says of its roots beyond what every kind says: that none
+    // of them is chosen for a session, and that a chain of ISO 15118's is not
+    // checked at all where there is no root of its kind - a server's still is,
+    // against the roots this machine trusts. And what it presents is chosen
+    // for a session, on the Charging page.
     certificates: {
 
         hints: {
 
             believes:     html`
-                Trust anchors. Every switched-on root of a kind is believed at once, and none of them is
-                chosen for a session. A vehicle holding no root of a kind does not check that kind of
-                chain at all, and says so in the log rather than silently accepting it.
+                Trust anchors: the roots a certificate shown to this vehicle has to chain to, each kind for
+                what its card says it is for. Every switched-on root of a kind is believed at once, and none
+                of them is chosen for a session. A vehicle holding no V2G, Mobility Operator or OEM root does
+                not check that kind of chain at all, and says so in the log rather than silently accepting
+                it; a server's certificate may chain to the roots this machine trusts as well.
             `,
 
             presents:     html`
