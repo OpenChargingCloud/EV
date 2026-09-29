@@ -1,16 +1,19 @@
-import { api, type Configuration } from '../api/client';
-import { html, must, render, type HTMLFragment } from '@node/html';
+import { api } from '../api/client';
+import { card, librariesCard } from '@node/cards';
+import { html, must, render } from '@node/html';
 import type { Page } from '@node/router';
 import { shell } from '@node/shell';
-import { errorMessage, formatSince, formatValue, humanizeKey } from '@node/ui';
+import { errorMessage, formatSince } from '@node/ui';
 
 /**
  * What this vehicle is - read-only: it answers "what am I running", not
  * "change it". The pages below this one are where things change.
  *
- * The sections are rendered from whatever the vehicle sends rather than from a
- * list kept here, so a field added on the server shows up without a change to
- * this page. Only the order and the headings are decided here.
+ * The fields of each section are rendered from whatever the vehicle sends
+ * rather than from a list kept here, so a field added on the server shows up
+ * without a change to this page. The sections are not: which of them there
+ * are, their order and their headings are decided here, and a section the
+ * server adds shows up once it has a card below.
  */
 export const configurationPage: Page = {
 
@@ -63,12 +66,7 @@ export const configurationPage: Page = {
                         ${card('Event log',     'fa-list-ul',          configuration.log)}
                         ${card('Time',          'fa-clock',            configuration.time)}
 
-                        <section class="card">
-                            <h2><i class="fa-solid fa-cubes"></i> Libraries</h2>
-                            <div class="kv-list">
-                                ${libraries(configuration.assemblies)}
-                            </div>
-                        </section>
+                        ${librariesCard(configuration.assemblies)}
 
                     </div>
 
@@ -96,111 +94,3 @@ export const configurationPage: Page = {
     }
 
 };
-
-
-/**
- * The lines of the Libraries card: one per repository the vehicle was built
- * from, as the node sends them, with its version and the whole commit.
- *
- * The node names one assembly of each repository as well - the first by
- * name, which says nothing of a repository of dozens: beside WWCP_ISO15118,
- * "cloud.charging.open.protocols.ISO15118.SDP" read as if that were all of
- * it. So an assembly is named only where two lines share a repository's name
- * and would not otherwise say which is which, as the banner does it.
- */
-export function libraries(lines: Record<string, unknown>[]): HTMLFragment {
-
-    const rows    = lines.map(line => ({ line, name: formatValue(line.name) }));
-    const shared  = new Set(rows.map(row => row.name).
-                                 filter((name, index, names) => names.indexOf(name) !== index));
-
-    return html`${rows.map(({ line, name }) => html`
-        <div class="kv">
-            <span class="k">${breakable(name)}</span>
-            <span class="v">
-                ${formatValue(line.version)}
-                ${shared.has(name)
-                      ? html`<span class="muted small">${breakable(formatValue(line.assembly))}</span>`
-                      : ''}
-                ${typeof line.commit === 'string'
-                      ? html`<span class="muted small commit">${line.commit}</span>`
-                      : ''}
-            </span>
-        </div>
-    `)}`;
-
-}
-
-
-/**
- * A dotted name that may break after its dots.
- *
- * A library's name has no space in it to break at, so "BouncyCastle.Cryptography"
- * ran out of its column and across the version beside it, and
- * "cloud.charging.open.protocols.ISO15118.SDP" broke wherever the line
- * happened to end - "open.pr" on one line, "otocols" on the next. After a dot
- * is where somebody reading it would break it.
- */
-function breakable(name: string): HTMLFragment {
-
-    const parts = name.split('.');
-
-    return html`${parts.map((part, index) => index < parts.length - 1
-                                                 ? html`${part}.<wbr>`
-                                                 : html`${part}`)}`;
-
-}
-
-
-/**
- * One section: every field the vehicle sent, in the order it sent them, with
- * anything that is itself a list of things rendered as a nested block.
- */
-function card(title:    string,
-              icon:     string,
-              values:   Record<string, unknown>,
-              extra?:   HTMLFragment): HTMLFragment {
-
-    const entries = Object.entries(values ?? {});
-
-    return html`
-        <section class="card">
-
-            <h2><i class="fa-solid ${icon}"></i> ${title}</h2>
-
-            <div class="kv-list">
-
-                ${extra ?? ''}
-
-                ${entries.map(([key, value]) => Array.isArray(value) && value.some(item => typeof item === 'object' && item !== null)
-                    ? html`
-                        <div class="kv-nested">
-                            <span class="k">${humanizeKey(key)}</span>
-                            <div class="nested">
-                                ${(value as Record<string, unknown>[]).map(item => html`
-                                    <div class="nested-item">
-                                        ${Object.entries(item).map(([itemKey, itemValue]) => html`
-                                            <div class="kv">
-                                                <span class="k">${humanizeKey(itemKey)}</span>
-                                                <span class="v">${formatValue(itemValue)}</span>
-                                            </div>
-                                        `)}
-                                    </div>
-                                `)}
-                            </div>
-                        </div>
-                    `
-                    : html`
-                        <div class="kv">
-                            <span class="k">${humanizeKey(key)}</span>
-                            <span class="v">${formatValue(value)}</span>
-                        </div>
-                    `
-                )}
-
-            </div>
-
-        </section>
-    `;
-
-}

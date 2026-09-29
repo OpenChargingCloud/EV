@@ -37,14 +37,14 @@ export type Status = NodeStatus;
 
 /**
  * What the vehicle is: every node's sections, and its own. Only the shape the
- * Configuration page relies on is named; the rest is rendered from whatever
- * the vehicle sends, so that a new section on the server needs no change here.
+ * Configuration page relies on is named; the fields of each section are
+ * rendered from whatever the vehicle sends, so that a field added on the
+ * server needs no change here.
  */
 export interface Configuration extends NodeConfiguration {
-    vehicle:     Record<string, unknown>;
-    battery:     Record<string, unknown>;
-    v2g:         Record<string, unknown>;
-    assemblies:  Record<string, unknown>[];
+    vehicle:  Record<string, unknown>;
+    battery:  Record<string, unknown>;
+    v2g:      Record<string, unknown>;
 }
 
 
