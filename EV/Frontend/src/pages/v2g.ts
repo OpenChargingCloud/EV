@@ -1,5 +1,6 @@
 import { api, type DiscoveryResult, type SECC, type SlacResult, type V2GConfiguration, type V2GUpdate } from '../api/client';
 import { auth } from '../auth';
+import { keepDrafts } from '../drafts';
 import { toURL } from '@node/basePath';
 import { html, must, render, type HTMLFragment } from '@node/html';
 import type { Page } from '@node/router';
@@ -436,7 +437,7 @@ export const v2gPage: Page = {
             try
             {
                 current = await whileSaving(content, note, () => api.v2g.save(update));
-                draw();
+                keepDrafts(content, `${which}-form`, draw);
                 must<HTMLElement>(content, `#${which}-note`).textContent = 'Saved, and in effect for the next discovery.';
             }
             catch (problem)
@@ -452,7 +453,7 @@ export const v2gPage: Page = {
             must<HTMLElement>(content, '#discover-error').textContent = '';
 
             searching = true;
-            draw();
+            keepDrafts(content, null, draw);
 
             try
             {
@@ -464,13 +465,13 @@ export const v2gPage: Page = {
             catch (problem)
             {
                 searching = false;
-                draw();
+                keepDrafts(content, null, draw);
                 must<HTMLElement>(content, '#discover-error').textContent = errorMessage(problem);
                 return;
             }
 
             searching = false;
-            draw();
+            keepDrafts(content, null, draw);
 
         }
 
@@ -483,7 +484,7 @@ export const v2gPage: Page = {
             // as the discovery's does.
             paired  = null;
             pairing = true;
-            draw();
+            keepDrafts(content, null, draw);
 
             try
             {
@@ -492,13 +493,13 @@ export const v2gPage: Page = {
             catch (problem)
             {
                 pairing = false;
-                draw();
+                keepDrafts(content, null, draw);
                 must<HTMLElement>(content, '#pair-error').textContent = errorMessage(problem);
                 return;
             }
 
             pairing = false;
-            draw();
+            keepDrafts(content, null, draw);
 
         }
 

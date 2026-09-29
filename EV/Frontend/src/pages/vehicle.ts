@@ -1,5 +1,6 @@
 import { api, type VehicleConfiguration, type VehicleUpdate } from '../api/client';
 import { auth } from '../auth';
+import { keepDrafts } from '../drafts';
 import { html, must, render } from '@node/html';
 import type { Page } from '@node/router';
 import { shell } from '@node/shell';
@@ -209,7 +210,7 @@ export const vehiclePage: Page = {
             try
             {
                 current = await whileSaving(content, note, () => api.vehicle.save(update));
-                draw();
+                keepDrafts(content, `${which}-form`, draw);
                 must<HTMLElement>(content, `#${which}-note`).textContent = 'Saved, and in effect from the next session.';
             }
             catch (problem)
