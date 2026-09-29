@@ -1,6 +1,7 @@
 import { api, type Certificate, type CertificateKind, type CertificateStore,
          type SessionBattery, type SessionConfiguration, type SessionRun, type SessionUpdate } from '../api/client';
 import { auth } from '../auth';
+import { toURL } from '@node/basePath';
 import { html, must, render, type HTMLFragment } from '@node/html';
 import type { Page } from '@node/router';
 import { shell } from '@node/shell';
@@ -114,7 +115,7 @@ export const sessionPage: Page = {
                 ${available.length === 0 && !missing ? html`
                     <p class="hint">
                         None of this kind is in the
-                        <a href="/configuration/certificates">certificate store</a> yet.
+                        <a href="${toURL('/configuration/certificates')}">certificate store</a> yet.
                     </p>` : ''}
             `;
 
@@ -215,7 +216,7 @@ export const sessionPage: Page = {
                         <p class="hint">
                             ${running
                                   ? html`
-                                      The session is running. Every message is on the <a href="/logs">Logs</a> page
+                                      The session is running. Every message is on the <a href="${toURL('/logs')}">Logs</a> page
                                       while it happens; the sum appears here when it ends.
                                     `
                                   : html`
@@ -368,7 +369,7 @@ export const sessionPage: Page = {
 
                             <span class="hint">
                                 Name none of these and the goal is the target state of charge on the
-                                <a href="/configuration/vehicle">Vehicle</a> page. Name several and the first one
+                                <a href="${toURL('/configuration/vehicle')}">Vehicle</a> page. Name several and the first one
                                 reached ends the session. The last one is a floor and not a goal: it cannot
                                 prolong a session - you cannot charge after driving off - and what it does is
                                 turn "the session ended" into "the session ended and the driver had enough, or
@@ -422,7 +423,7 @@ export const sessionPage: Page = {
 
                             <span class="hint">
                                 Saved to ${configuration.file}. These name certificates in this vehicle's
-                                <a href="/configuration/certificates">certificate store</a>; put one there first
+                                <a href="${toURL('/configuration/certificates')}">certificate store</a>; put one there first
                                 and it appears here. They are not interchangeable, and mixing them up produces
                                 failures that read like protocol bugs: the Vehicle one says who this vehicle is,
                                 the contract one says who pays, the OEM one is what it was born with and all it

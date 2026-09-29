@@ -1,5 +1,6 @@
 import { api, type DiscoveryResult, type SECC, type SlacResult, type V2GConfiguration, type V2GUpdate } from '../api/client';
 import { auth } from '../auth';
+import { toURL } from '@node/basePath';
 import { html, must, render, type HTMLFragment } from '@node/html';
 import type { Page } from '@node/router';
 import { shell } from '@node/shell';
@@ -131,7 +132,7 @@ export const v2gPage: Page = {
                             heard, and the quietest link is the cable that is plugged in.
                             Real SLAC is EtherType 0x88E1 over AF_PACKET and needs Linux and CAP_NET_RAW;
                             this runs the same state machine over a simulated medium, against the peer set
-                            on the <a href="/configuration/session">Charging</a> page. A session pairs by
+                            on the <a href="${toURL('/configuration/session')}">Charging</a> page. A session pairs by
                             itself where one is configured - this button is here because SLAC agreeing and
                             SDP finding nothing is a very different link from SLAC never agreeing at all.
                         </p>
