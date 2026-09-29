@@ -66,18 +66,7 @@ export const configurationPage: Page = {
                         <section class="card">
                             <h2><i class="fa-solid fa-cubes"></i> Libraries</h2>
                             <div class="kv-list">
-                                ${configuration.assemblies.map(assembly => html`
-                                    <div class="kv">
-                                        <span class="k">${breakable(formatValue(assembly.name))}</span>
-                                        <span class="v">
-                                            ${formatValue(assembly.version)}
-                                            <span class="muted small">${breakable(formatValue(assembly.assembly))}</span>
-                                            ${typeof assembly.commit === 'string'
-                                                  ? html`<span class="muted small commit">${assembly.commit}</span>`
-                                                  : ''}
-                                        </span>
-                                    </div>
-                                `)}
+                                ${libraries(configuration.assemblies)}
                             </div>
                         </section>
 
@@ -107,6 +96,40 @@ export const configurationPage: Page = {
     }
 
 };
+
+
+/**
+ * The lines of the Libraries card: one per repository the vehicle was built
+ * from, as the node sends them, with its version and the whole commit.
+ *
+ * The node names one assembly of each repository as well - the first by
+ * name, which says nothing of a repository of dozens: beside WWCP_ISO15118,
+ * "cloud.charging.open.protocols.ISO15118.SDP" read as if that were all of
+ * it. So an assembly is named only where two lines share a repository's name
+ * and would not otherwise say which is which, as the banner does it.
+ */
+export function libraries(lines: Record<string, unknown>[]): HTMLFragment {
+
+    const rows    = lines.map(line => ({ line, name: formatValue(line.name) }));
+    const shared  = new Set(rows.map(row => row.name).
+                                 filter((name, index, names) => names.indexOf(name) !== index));
+
+    return html`${rows.map(({ line, name }) => html`
+        <div class="kv">
+            <span class="k">${breakable(name)}</span>
+            <span class="v">
+                ${formatValue(line.version)}
+                ${shared.has(name)
+                      ? html`<span class="muted small">${breakable(formatValue(line.assembly))}</span>`
+                      : ''}
+                ${typeof line.commit === 'string'
+                      ? html`<span class="muted small commit">${line.commit}</span>`
+                      : ''}
+            </span>
+        </div>
+    `)}`;
+
+}
 
 
 /**
