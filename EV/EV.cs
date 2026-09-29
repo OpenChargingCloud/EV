@@ -85,6 +85,20 @@ namespace cloud.charging.open.EV
         public static new readonly  IPPort  DefaultHTTPPort   = IPPort.Parse(2347);
 
         /// <summary>
+        /// What a vehicle is to the node below it: what it calls itself in
+        /// everything it says, the tag of its own entries, its product, the
+        /// one organization of its accounts and what its log files are called.
+        /// Known before one is made, for what -h shows.
+        /// </summary>
+        public static readonly  NodeKind  EVKind  = new (
+                                                        Name:           "electric vehicle",
+                                                        Tag:            "vehicle",
+                                                        Product:        "EV",
+                                                        Organization:   "Vehicle",
+                                                        LogFilePrefix:  "ev"
+                                                    );
+
+        /// <summary>
         /// Lets one SDP discovery run at a time.
         /// </summary>
         /// <remarks>
@@ -207,13 +221,7 @@ namespace cloud.charging.open.EV
                   Boolean                BridgeDebugLog     = true,
                   TimeProvider?          TimeProvider       = null)
 
-            : base(Kind:               new NodeKind(
-                                           Name:           "electric vehicle",
-                                           Tag:            "vehicle",
-                                           Product:        "EV",
-                                           Organization:   "Vehicle",
-                                           LogFilePrefix:  "ev"
-                                       ),
+            : base(Kind:               EVKind,
                    Version:            typeof(EV).Assembly.GetName().Version?.ToString(3) ?? "0.0.0",
                    HTTPPort:           HTTPPort ?? DefaultHTTPPort,
                    HTTPHostname:       HTTPHostname,
