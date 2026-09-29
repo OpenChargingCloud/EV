@@ -8,8 +8,6 @@ import '@fortawesome/fontawesome-free/css/solid.css';
 import { nodeMenu, startNode } from '@node/start';
 
 import { configurationPage } from './pages/configuration';
-import { dnsPage }           from './pages/dns';
-import { ntsPage }           from './pages/nts';
 import { vehiclePage }       from './pages/vehicle';
 import { v2gPage }           from './pages/v2g';
 import { certificatesPage }  from './pages/certificates';
@@ -17,10 +15,11 @@ import { sessionPage }       from './pages/session';
 
 // What a vehicle has pages for beside what every node has: itself and its
 // battery, the wire below the charging cable, and charging. The sign-in, the
-// log, the frame and following the log while somebody is signed in are every
-// node's - see WWCP_Node's start.ts. Following the log is also what makes the
-// ISO 15118 page worth watching: a discovery writes every attempt and every
-// answer into it as it happens.
+// log, the name servers, the time servers, the frame, "/" - the first page of
+// the menu the account signed in may open - and following the log while
+// somebody is signed in are every node's - see WWCP_Node's start.ts.
+// Following the log is also what makes the ISO 15118 page worth watching: a
+// discovery writes every attempt and every answer into it as it happens.
 startNode({
 
     name:  'Electric Vehicle',
@@ -40,13 +39,7 @@ startNode({
 
     pages: {
 
-        // "/" is the configuration, and is a page of its own rather than a
-        // redirect to /configuration: the sign-in remembers where somebody was
-        // going, and for the first visit that is "/".
-        '/':                            configurationPage,
         '/configuration':               configurationPage,
-        '/configuration/dns':           dnsPage,
-        '/configuration/nts':           ntsPage,
         '/configuration/vehicle':       vehiclePage,
         '/configuration/v2g':           v2gPage,
         '/configuration/certificates':  certificatesPage,

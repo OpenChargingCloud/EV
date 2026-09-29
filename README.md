@@ -44,15 +44,15 @@ Hermod's `EmbeddedContentSource` reads. So a build needs Node.js, and a
 deployment needs nothing but the DLL.
 
 Not everything in that bundle is the vehicle's. What the web interface of every
-kind of node shares - the frame with its menu, the sign-in, the Logs page and
-the stylesheet, and below them building HTML safely, the router, where the
-pages are mounted, asking before a page's changes are left behind, how the node
-is asked and what every node answers, the log the pages follow, and who is
-signed in - is WWCP_Node's, in its `Frontend/src`, and bundled in as
-`@node/...`. What is the vehicle's is what it adds: `main.ts` names its menu
-and its pages, `api/client.ts` its routes, and `styles/app.scss` its colour. So
-a new WWCP_Node can change the vehicle's pages without a line changed here,
-which is why the build counts those files among its inputs.
+kind of node shares - the frame with its menu, the sign-in, the Logs, DNS
+client and NTS client pages and the stylesheet, and below them building HTML
+safely, the router, where the pages are mounted, asking before a page's changes
+are left behind, how the node is asked and what every node answers, the log the
+pages follow, and who is signed in - is WWCP_Node's, in its `Frontend/src`, and
+bundled in as `@node/...`. What is the vehicle's is what it adds: `main.ts`
+names its menu and its pages, `api/client.ts` its routes, and `styles/app.scss`
+its colour. So a new WWCP_Node can change the vehicle's pages without a line
+changed here, which is why the build counts those files among its inputs.
 
 `dotnet build -p:SkipFrontendBuild=true` leaves the npm step out and reuses
 whatever is already in `dist/` - or, where nothing is, builds a vehicle with no
@@ -198,11 +198,13 @@ them is when the file says nothing, and how a group of time servers is asked,
 agreed on and held to its certificates is written down once, in
 [WWCP_Node's README](https://github.com/OpenChargingCloud/WWCP_Node#name-resolution-and-the-time).
 
-What the vehicle adds is its pages. Its DNS client and NTS client pages read
-and change the two sections through `/api/v1/configuration/dns` and
-`/api/v1/configuration/nts`, every node's routes, and ask a name server or a
-time server something from there; asking a time server measures the clock and
-never steps it.
+The pages are the node's as well. The DNS client and NTS client pages,
+WWCP_Node's like the frame they sit in, read and change the two sections
+through `/api/v1/configuration/dns` and `/api/v1/configuration/nts`, every
+node's routes, and ask a name server or a time server something from there;
+asking a time server measures the clock and never steps it. The NTS page shows
+the clock as well, and what counts as legal time - who stands behind it, and
+how far off and how old a check may be - with a form of its own.
 
 A time server, and a name server asked over TLS or HTTPS, can be held to a
 certificate or a root, and the pages are where that is said: a server's dialog
@@ -215,18 +217,17 @@ when it showed another certificate than before. A lookup on the DNS page says
 the same of every certificate it met.
 
 The whole list goes to the vehicle at every save, so every server goes with
-what it is held to, and the pages' `ntsServers.ts`, `dnsServers.ts` and
+what it is held to, and WWCP_Node's `ntsServers.ts`, `dnsServers.ts` and
 `pins.ts` are where that is decided and tested: a list sent without the pins of
 the servers nobody touched would let go of them, the ones learned on first use
 included. And each server goes with what the page showed it held to, as
 `pinsAsShown`, so that the vehicle changes only what was changed on the page: a
 root a server learned while the page was open - the first key exchange or
 handshake after a save is seconds later - stays when the page saves something
-else. That is the pages' part until WWCP_Node's shared pages take it over. A
-name server switched to a transport that shows no certificate lets go of its
-pins when it is saved - the vehicle would refuse them - and its row says so
-first. Holding a server to a fingerprint is the service's, with the rest of the
-server: a pin cannot make the vehicle believe a certificate that chains to
+else. A name server switched to a transport that shows no certificate lets go
+of its pins when it is saved - the vehicle would refuse them - and its row says
+so first. Holding a server to a fingerprint is the service's, with the rest of
+the server: a pin cannot make the vehicle believe a certificate that chains to
 nothing this machine or its store holds, and what goes into the store stays the
 administrators'.
 
