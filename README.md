@@ -45,13 +45,14 @@ deployment needs nothing but the DLL.
 
 Not everything in that bundle is the vehicle's. What the web interface of every
 kind of node shares - the frame with its menu, the sign-in, the Logs, DNS
-client and NTS client pages and the stylesheet, and below them building HTML
-safely, the router, where the pages are mounted, asking before a page's changes
-are left behind, how the node is asked and what every node answers, the log the
-pages follow, and who is signed in - is WWCP_Node's, in its `Frontend/src`, and
-bundled in as `@node/...`. What is the vehicle's is what it adds: `main.ts`
-names its menu and its pages, `api/client.ts` its routes, and `styles/app.scss`
-its colour. So a new WWCP_Node can change the vehicle's pages without a line
+client, NTS client and Certificates pages and the stylesheet, and below them
+building HTML safely, the router, where the pages are mounted, asking before a
+page's changes are left behind, how the node is asked and what every node
+answers, the log the pages follow, and who is signed in - is WWCP_Node's, in
+its `Frontend/src`, and bundled in as `@node/...`. What is the vehicle's is
+what it adds: `main.ts` names its menu, its pages and its own words on the
+Certificates page, `api/client.ts` its routes, and `styles/app.scss` its
+colour. So a new WWCP_Node can change the vehicle's pages without a line
 changed here, which is why the build counts those files among its inputs.
 
 `dotnet build -p:SkipFrontendBuild=true` leaves the npm step out and reuses
