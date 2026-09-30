@@ -35,6 +35,13 @@ sections go into the same configuration file, and its routes into the JSON
 API every node has below `/api` - the node's `NodeHTTPAPI`, with the
 vehicle's settings, V2G and the session on top.
 
+A change of the vehicle's own sections is answered as one of the node's is:
+with 400 where something is wrong with it, and with 500 and why where nothing
+is and the configuration file cannot take it - it cannot be read, or its next
+version cannot be written - through the node's `NotChanged`. Either way nothing
+is changed. `EVTests/VehicleConformance.Configuration.cs` asks it of `vehicle`,
+`v2g` and `session`, as the kit's conformance suite asks it of `dns` and `nts`.
+
 
 ## The web interface is part of the assembly
 
@@ -74,8 +81,11 @@ The vehicle's C# is held in the same way to what the code of every kind of node
 is: `EVTests/SourceRulesTests.cs` puts `EV/` under `SourceRules` of WWCP_Node's
 test kit, which finds "a" or "an" in front of a name that is interpolated.
 Which article a name takes goes by how the name is said - "an OEM root", but
-"a V2G root" - so a kind of certificate is said with `WithArticle()`.
-`dotnet test` runs it, and the CI with it.
+"a V2G root" - so a kind of certificate is said with `WithArticle()`. The test
+finds the repository by `EV/EV.csproj` and `EVTests/EVTests.csproj` rather than
+by their directories: a build with `--artifacts-path` has a directory named
+after each project below `artifacts/bin`, where the rule would have read
+nothing and passed. `dotnet test` runs it, and the CI with it.
 
 And where a page draws itself anew - after one of its forms is saved, or a
 discovery or a pairing has answered - what is typed into its other forms stays:

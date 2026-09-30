@@ -41,7 +41,7 @@ namespace cloud.charging.open.EV.Tests
     /// copies of the event stream's tests and of the learned pins, and none
     /// of the rest.
     /// </remarks>
-    public class VehicleConformance : NodeConformanceTests
+    public partial class VehicleConformance : NodeConformanceTests
     {
 
         protected override WWCPNode NewNode(String   Directory,

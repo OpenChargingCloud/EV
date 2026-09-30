@@ -48,7 +48,12 @@ namespace cloud.charging.open.EV.Tests
         public void NoTextOfThisVehiclePutsAnArticleBeforeAName()
         {
 
-            var repository = SourceRules.RepositoryAbove(AppContext.BaseDirectory, "EV", "EVTests");
+            // Found by a file of each project, not by their directories: a
+            // build with --artifacts-path has a directory named after each
+            // project below artifacts/bin, where the rule read nothing and
+            // passed (found by the charging station).
+            var repository = SourceRules.RepositoryAbove(AppContext.BaseDirectory, "EV/EV.csproj",
+                                                                                   "EVTests/EVTests.csproj");
 
             Assert.That(SourceRules.ArticlesBeforeANameIn(Path.Combine(repository, "EV")),
                         Is.Empty);

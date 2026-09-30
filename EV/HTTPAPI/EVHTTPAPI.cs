@@ -156,8 +156,8 @@ namespace cloud.charging.open.EV
             if (!TryParseJSONObject(Request, out var json, out var errorResponse))
                 return Task.FromResult(errorResponse);
 
-            if (!Vehicle.TryUpdateVehicleConfiguration(json, out var error))
-                return Task.FromResult(ErrorJSON(Request, HTTPStatusCode.BadRequest, error));
+            if (!Vehicle.TryUpdateVehicleConfiguration(json, out var error, out var notSaved))
+                return Task.FromResult(NotChanged(Request, HTTPStatusCode.BadRequest, error, notSaved));
 
             return Task.FromResult(
                        JSONResponse(Request, HTTPStatusCode.OK, Vehicle.VehicleConfigurationJSON())
@@ -203,8 +203,8 @@ namespace cloud.charging.open.EV
             if (!TryParseJSONObject(Request, out var json, out var errorResponse))
                 return Task.FromResult(errorResponse);
 
-            if (!Vehicle.TryUpdateV2GConfiguration(json, out var error))
-                return Task.FromResult(ErrorJSON(Request, HTTPStatusCode.BadRequest, error));
+            if (!Vehicle.TryUpdateV2GConfiguration(json, out var error, out var notSaved))
+                return Task.FromResult(NotChanged(Request, HTTPStatusCode.BadRequest, error, notSaved));
 
             return Task.FromResult(
                        JSONResponse(Request, HTTPStatusCode.OK, Vehicle.V2GConfigurationJSON())
@@ -307,8 +307,8 @@ namespace cloud.charging.open.EV
             if (!TryAuthorize(Request, PermissionsForSession(json), true, out _, out var refused))
                 return Task.FromResult(refused);
 
-            if (!Vehicle.TryUpdateSessionConfiguration(json, out var error))
-                return Task.FromResult(ErrorJSON(Request, HTTPStatusCode.BadRequest, error));
+            if (!Vehicle.TryUpdateSessionConfiguration(json, out var error, out var notSaved))
+                return Task.FromResult(NotChanged(Request, HTTPStatusCode.BadRequest, error, notSaved));
 
             return Task.FromResult(
                        JSONResponse(Request, HTTPStatusCode.OK, Vehicle.SessionConfigurationJSON())

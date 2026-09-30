@@ -91,7 +91,7 @@ namespace cloud.charging.open.EV
 
         #endregion
 
-        #region TryUpdateVehicleConfiguration(JSON, out Error)
+        #region TryUpdateVehicleConfiguration(JSON, out Error [, out NotSaved])
 
         /// <summary>
         /// Change what this vehicle says about itself, at once and for the
@@ -105,7 +105,22 @@ namespace cloud.charging.open.EV
         /// </remarks>
         public Boolean TryUpdateVehicleConfiguration(JObject                           JSON,
                                                      [NotNullWhen(false)] out String?  Error)
+
+            => TryUpdateVehicleConfiguration(JSON, out Error, out _);
+
+        /// <summary>
+        /// Change what this vehicle says about itself - and say whether a
+        /// refusal was the file's rather than the change's.
+        /// </summary>
+        /// <param name="JSON">What the page sent, in the shape of the "vehicle" section.</param>
+        /// <param name="Error">Why nothing was changed.</param>
+        /// <param name="NotSaved">True where the configuration file could not be read or written: nothing about the change was wrong, and nothing was changed.</param>
+        public Boolean TryUpdateVehicleConfiguration(JObject                           JSON,
+                                                     [NotNullWhen(false)] out String?  Error,
+                                                     out Boolean                       NotSaved)
         {
+
+            NotSaved = false;
 
             if (!VehicleConfiguration.TryParse(JSON, out var configuration, out Error))
                 return false;
@@ -115,8 +130,12 @@ namespace cloud.charging.open.EV
             try
             {
 
+                // Everything this refuses is the file's: read, merged, written.
                 if (!ConfigFile.TryMergeSection(VehicleConfiguration.SectionName, configuration.ToJSON(), out Error))
+                {
+                    NotSaved = true;
                     return false;
+                }
 
                 ApplyVehicleConfiguration(configuration);
 
@@ -243,7 +262,7 @@ namespace cloud.charging.open.EV
 
         #endregion
 
-        #region TryUpdateV2GConfiguration(JSON, out Error)
+        #region TryUpdateV2GConfiguration(JSON, out Error [, out NotSaved])
 
         /// <summary>
         /// Change what the next discovery does.
@@ -257,7 +276,22 @@ namespace cloud.charging.open.EV
         /// </remarks>
         public Boolean TryUpdateV2GConfiguration(JObject                           JSON,
                                                  [NotNullWhen(false)] out String?  Error)
+
+            => TryUpdateV2GConfiguration(JSON, out Error, out _);
+
+        /// <summary>
+        /// Change what the next discovery does - and say whether a refusal was
+        /// the file's rather than the change's.
+        /// </summary>
+        /// <param name="JSON">What the page sent, in the shape of the "v2g" section.</param>
+        /// <param name="Error">Why nothing was changed.</param>
+        /// <param name="NotSaved">True where the configuration file could not be read or written: nothing about the change was wrong, and nothing was changed.</param>
+        public Boolean TryUpdateV2GConfiguration(JObject                           JSON,
+                                                 [NotNullWhen(false)] out String?  Error,
+                                                 out Boolean                       NotSaved)
         {
+
+            NotSaved = false;
 
             if (!V2GConfiguration.TryParse(JSON, out var configuration, out Error))
                 return false;
@@ -286,8 +320,12 @@ namespace cloud.charging.open.EV
             try
             {
 
+                // Everything this refuses is the file's: read, merged, written.
                 if (!ConfigFile.TryMergeSection(V2GConfiguration.SectionName, configuration.ToJSON(), out Error))
+                {
+                    NotSaved = true;
                     return false;
+                }
 
                 ApplyV2GConfiguration(configuration);
 
@@ -559,7 +597,7 @@ namespace cloud.charging.open.EV
 
         #endregion
 
-        #region TryUpdateSessionConfiguration(JSON, out Error)
+        #region TryUpdateSessionConfiguration(JSON, out Error [, out NotSaved])
 
         /// <summary>
         /// Change what the next session does.
@@ -575,7 +613,22 @@ namespace cloud.charging.open.EV
         /// </remarks>
         public Boolean TryUpdateSessionConfiguration(JObject                           JSON,
                                                      [NotNullWhen(false)] out String?  Error)
+
+            => TryUpdateSessionConfiguration(JSON, out Error, out _);
+
+        /// <summary>
+        /// Change what the next session does - and say whether a refusal was
+        /// the file's rather than the change's.
+        /// </summary>
+        /// <param name="JSON">What the page sent, in the shape of the "session" section.</param>
+        /// <param name="Error">Why nothing was changed.</param>
+        /// <param name="NotSaved">True where the configuration file could not be read or written: nothing about the change was wrong, and nothing was changed.</param>
+        public Boolean TryUpdateSessionConfiguration(JObject                           JSON,
+                                                     [NotNullWhen(false)] out String?  Error,
+                                                     out Boolean                       NotSaved)
         {
+
+            NotSaved = false;
 
             if (!SessionConfiguration.TryParse(JSON, out var configuration, out Error))
                 return false;
@@ -628,8 +681,12 @@ namespace cloud.charging.open.EV
             try
             {
 
+                // Everything this refuses is the file's: read, merged, written.
                 if (!ConfigFile.TryMergeSection(SessionConfiguration.SectionName, configuration.ToJSON(), out Error))
+                {
+                    NotSaved = true;
                     return false;
+                }
 
                 ApplySessionConfiguration(configuration);
 
