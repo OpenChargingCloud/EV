@@ -345,7 +345,7 @@ namespace cloud.charging.open.EV.ISO15118
                                    Answer(started, success.Attempts, success.Elapsed, "found",
                                        new JProperty("secc",   SECCJSON(success.Response, success.RemoteEndpoint)),
                                        new JProperty("others", new JArray(
-                                           success.AdditionalResponses.Select(response => SECCJSON(response, null))
+                                           success.AdditionalResponses.Select((response, index) => SECCJSON(response, success.AdditionalRemoteEndpoints.ElementAtOrDefault(index)))
                                        ))
                                    ),
                                    // The interface's index, so that a link-local
@@ -369,8 +369,8 @@ namespace cloud.charging.open.EV.ISO15118
                         return new DiscoveryOutcome(
                                    Answer(started, rejected.Attempts, rejected.Elapsed, "rejected",
                                        new JProperty("rejected", new JArray(
-                                           rejected.RejectedResponses.Select(entry => {
-                                               var json = SECCJSON(entry.Response, null);
+                                           rejected.RejectedResponses.Select((entry, index) => {
+                                               var json = SECCJSON(entry.Response, rejected.RejectedRemoteEndpoints.ElementAtOrDefault(index));
                                                json["reason"] = entry.Reason;
                                                return json;
                                            })

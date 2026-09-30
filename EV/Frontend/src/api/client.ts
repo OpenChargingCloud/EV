@@ -95,7 +95,7 @@ export interface SECC {
     security:   'tls' | 'noTls';
     transport:  string;
     version:    string;
-    /** The address on the packet: who actually sent it. Only for the first answer. */
+    /** The address on the packet: who actually sent it, for every answer. */
     from:       string | null;
     /** Why this answer was refused, when it was. */
     reason?:    string;
