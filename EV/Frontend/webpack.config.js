@@ -85,13 +85,18 @@ module.exports = (env, argv) => {
             new MiniCssExtractPlugin({
                 filename: 'assets/[name].[contenthash].css'
             }),
+            // The page itself is the node's, the one every kind of node
+            // serves, beside the files of '@node' above: this names the
+            // vehicle into it - its title, what it is, and the version of its
+            // frontend. A page that is not told what it is stops the build.
             new HtmlWebpackPlugin({
-                template:  './src/index.html',
-                filename:  'index.html',
-                chunks:    ['main'],
-                favicon:   './src/favicon.svg',
-                title:     'Electric Vehicle',
-                version:   appVersion
+                template:     path.resolve(__dirname, '../../../WWCP_Node/Frontend/src/index.html'),
+                filename:     'index.html',
+                chunks:       ['main'],
+                favicon:      './src/favicon.svg',
+                title:        'Electric Vehicle',
+                description:  'The web interface of an OpenChargingCloud electric vehicle, served by the Hermod HTTP/1.1 server',
+                version:      appVersion
             })
         ],
 
