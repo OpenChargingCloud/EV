@@ -60,14 +60,22 @@ The vehicle's own pages are held to what every page of every kind of node is:
 `test/pages.ts` - a page with a form says whether it holds a draft and holds
 every form it has, its Reload asks first, it draws itself anew through
 `keepDrafts` and not with a second `draw()`, the form it names there as the one
-saved is one it has, every form has an id or a data-id to be known by, and it
-reads its numbers with `numberField`, so that an emptied field goes out as "not
-given" and not as a zero. Its links go through `toURL`, so that they stay below
-the base the vehicle is mounted at; its look comes from the stylesheet, since a
-`style` attribute is dropped by the policy the pages are served with; and what
-somebody may not do, it says through `mayButNot`, which names no role as the
-one that is needed - which roles there are, and what each may, is the
-configuration file's to say. `npm test` runs it, and the CI with it.
+saved is one it has, and every form has an id or a data-id to be known by. A
+page reads its numbers with `numberField`, with a form or without, so that an
+emptied field goes out as "not given" and not as a zero. Its links go through
+`toURL`, so that they stay below the base the vehicle is mounted at; its look
+comes from the stylesheet, since a `style` attribute is dropped by the policy
+the pages are served with; and what somebody may not do, it says through
+`mayButNot`, which names no role as the one that is needed - which roles there
+are, and what each may, is the configuration file's to say. `npm test` runs it,
+and the CI with it.
+
+The vehicle's C# is held in the same way to what the code of every kind of node
+is: `EVTests/SourceRulesTests.cs` puts `EV/` under `SourceRules` of WWCP_Node's
+test kit, which finds "a" or "an" in front of a name that is interpolated.
+Which article a name takes goes by how the name is said - "an OEM root", but
+"a V2G root" - so a kind of certificate is said with `WithArticle()`.
+`dotnet test` runs it, and the CI with it.
 
 And where a page draws itself anew - after one of its forms is saved, or a
 discovery or a pairing has answered - what is typed into its other forms stays:

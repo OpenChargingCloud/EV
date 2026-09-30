@@ -610,8 +610,8 @@ namespace cloud.charging.open.EV
 
                 if (entry.Kind != wanted)
                 {
-                    Error = $"'{SessionConfiguration.SectionName}.{field}': '{entry.Label}' is a " +
-                            $"{entry.Kind.AsText()} and this names a {wanted.AsText()}.";
+                    Error = $"'{SessionConfiguration.SectionName}.{field}': '{entry.Label}' is " +
+                            $"{entry.Kind.WithArticle()} and this names {wanted.WithArticle()}.";
                     return false;
                 }
 

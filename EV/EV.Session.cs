@@ -620,8 +620,8 @@ namespace cloud.charging.open.EV
 
             if (entry.Kind != Kind)
                 throw new ArgumentException(
-                          $"session.{Field}: '{entry.Label}' is a {entry.Kind.AsText()} and this names a " +
-                          $"{Kind.AsText()}.");
+                          $"session.{Field}: '{entry.Label}' is {entry.Kind.WithArticle()} and this names " +
+                          $"{Kind.WithArticle()}.");
 
             if (!entry.IsActive)
                 throw new ArgumentException(
