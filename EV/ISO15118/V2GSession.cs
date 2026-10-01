@@ -17,6 +17,7 @@
 
 #region Usings
 
+using System.Globalization;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 
@@ -187,7 +188,7 @@ namespace cloud.charging.open.EV.ISO15118
             result.JSON["protocol"]    = V2GInterface.Name(options.Protocol);
             result.JSON["mode"]        = options.MCS ? "MCS" : V2GInterface.Name(options.Mode);
 
-            Log.Notice($"Session: {result.JSON.Value<String>("outcome")} after {watch.Elapsed.TotalSeconds:F1} s.",
+            Log.Notice(String.Create(CultureInfo.InvariantCulture, $"Session: {result.JSON.Value<String>("outcome")} after {watch.Elapsed.TotalSeconds:F1} s."),
                        "15118", "session");
 
             return result;

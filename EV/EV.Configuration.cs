@@ -18,6 +18,7 @@
 #region Usings
 
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 
 using Newtonsoft.Json.Linq;
 
@@ -177,7 +178,7 @@ namespace cloud.charging.open.EV
             if (Configuration.BatteryCapacity_kWh.HasValue && BatteryCapacity_kWh != Configuration.BatteryCapacity_kWh.Value)
             {
                 BatteryCapacity_kWh = Configuration.BatteryCapacity_kWh.Value;
-                changed.Add($"battery = {BatteryCapacity_kWh:F1} kWh");
+                changed.Add(String.Create(CultureInfo.InvariantCulture, $"battery = {BatteryCapacity_kWh:F1} kWh"));
             }
 
             if (Configuration.StateOfCharge_percent.HasValue && StateOfCharge_percent != Configuration.StateOfCharge_percent.Value)
@@ -195,7 +196,7 @@ namespace cloud.charging.open.EV
             if (Configuration.MaxChargingPower_kW.HasValue && MaxChargingPower_kW != Configuration.MaxChargingPower_kW.Value)
             {
                 MaxChargingPower_kW = Configuration.MaxChargingPower_kW.Value;
-                changed.Add($"charging power = {MaxChargingPower_kW:F1} kW");
+                changed.Add(String.Create(CultureInfo.InvariantCulture, $"charging power = {MaxChargingPower_kW:F1} kW"));
             }
 
             if (Configuration.TaperFrom_percent.HasValue && TaperFrom_percent != Configuration.TaperFrom_percent.Value)
@@ -811,7 +812,7 @@ namespace cloud.charging.open.EV
             }
 
             if (previous.TargetEnergy_kWh != targetEnergy)
-                changed.Add($"target energy = {(targetEnergy.HasValue ? $"{targetEnergy.Value:F1} kWh" : "none")}");
+                changed.Add($"target energy = {(targetEnergy.HasValue ? String.Create(CultureInfo.InvariantCulture, $"{targetEnergy.Value:F1} kWh") : "none")}");
 
             if (previous.MaxChargingTime != maxTime)
                 changed.Add($"charging time = {(maxTime.HasValue ? $"{maxTime.Value.TotalMinutes:F0} min" : "no limit")}");

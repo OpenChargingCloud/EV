@@ -18,6 +18,7 @@
 #region Usings
 
 using System.Net;
+using System.Globalization;
 
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
@@ -83,6 +84,57 @@ namespace cloud.charging.open.EV.Tests
                 Assert.That(response.StatusCode,          Is.EqualTo(HttpStatusCode.InternalServerError), said.ToString());
                 Assert.That(said.Value<String>("error"),  Does.StartWith($"'{Node.ConfigFile.Path}' could not be {Cannot}: "));
                 Assert.That(after[shown]?.ToString(),     Is.EqualTo(before[shown]?.ToString()), "what the page shows as saved");
+            });
+
+        }
+
+        #endregion
+
+        #region WhatChangedIsLoggedWithAPointWhateverTheCulture()
+
+        /// <summary>
+        /// What a change of the vehicle or of its session is logged with says
+        /// its numbers with a decimal point, as the node says its own, whatever
+        /// the culture of the machine it runs on: on a German Windows it was
+        /// "battery = 60,5 kWh", where --battery 60.5 is read with a point.
+        /// </summary>
+        [Test]
+        public void WhatChangedIsLoggedWithAPointWhateverTheCulture()
+        {
+
+            var vehicle  = (EV) Node;
+            var culture  = CultureInfo.CurrentCulture;
+
+            try
+            {
+
+                CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
+
+                Assert.That(vehicle.TryUpdateVehicleConfiguration(new JObject {
+                                                                      ["batteryCapacityKWh"]  = 60.5,
+                                                                      ["maxChargingPowerKW"]  = 22.5
+                                                                  },
+                                                                  out var vehicleRefused),
+                            Is.True, vehicleRefused);
+
+                Assert.That(vehicle.TryUpdateSessionConfiguration(new JObject {
+                                                                      ["targetEnergyKWh"]     = 12.5
+                                                                  },
+                                                                  out var sessionRefused),
+                            Is.True, sessionRefused);
+
+            }
+            finally
+            {
+                CultureInfo.CurrentCulture = culture;
+            }
+
+            var logged = vehicle.Log.Recent(50).Select(entry => entry.Message).ToArray();
+
+            Assert.Multiple(() => {
+                Assert.That(logged, Has.Some.Contains("battery = 60.5 kWh"),       String.Join(Environment.NewLine, logged));
+                Assert.That(logged, Has.Some.Contains("charging power = 22.5 kW"), String.Join(Environment.NewLine, logged));
+                Assert.That(logged, Has.Some.Contains("target energy = 12.5 kWh"), String.Join(Environment.NewLine, logged));
             });
 
         }
