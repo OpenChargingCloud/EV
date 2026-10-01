@@ -251,8 +251,9 @@ namespace cloud.charging.open.EV.ISO15118
                        $"{evcc.Renegotiations} renegotiation(s), session setup {evcc.SessionSetupCode}.",
                        "15118", "session");
 
+            // Describe says "Battery:" itself.
             if (evcc.Battery is { } battery && evcc.BatteryStop is { } stop)
-                Log.Notice($"Battery: {battery.Describe(stop)}", "15118", "session");
+                Log.Notice(battery.Describe(stop), "15118", "session");
 
             if (evcc.Tariff is { } tariff)
                 Log.Info($"Tariff: {tariff.TuplesOffered} tuple(s), signature " +
@@ -348,8 +349,9 @@ namespace cloud.charging.open.EV.ISO15118
                        $"auth {evcc.AuthorizationMode}, session setup {evcc.SessionSetupCode}.",
                        "15118", "session");
 
+            // Describe says "Battery:" itself.
             if (evcc.Battery is { } battery && evcc.BatteryStop is { } stop)
-                Log.Notice($"Battery: {battery.Describe(stop)}", "15118", "session");
+                Log.Notice(battery.Describe(stop), "15118", "session");
 
             var installedChainsTo = (String?) null;
 
