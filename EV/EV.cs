@@ -35,6 +35,7 @@ using cloud.charging.open.protocols.WWCP.Node;
 using cloud.charging.open.protocols.WWCP.Node.Certificates;
 using cloud.charging.open.protocols.WWCP.Node.Logging;
 using cloud.charging.open.protocols.WWCP.Node.Configuration;
+using cloud.charging.open.protocols.WWCP.Node.SecureShell;
 using cloud.charging.open.protocols.ISO15118.Security;
 
 #endregion
@@ -202,6 +203,7 @@ namespace cloud.charging.open.EV
         /// <param name="LogPath">The directory the log files are written to, or null to write none.</param>
         /// <param name="BridgeDebugLog">Whether what the libraries below write with DebugX is picked up.</param>
         /// <param name="TimeProvider">The clock, or null for the system one.</param>
+        /// <param name="SSH">What the program says about serving the command line over SSH; nothing by default - see SSHSettings.</param>
         public EV(IIPAddress?            HTTPHostname       = null,
                   IPPort?                HTTPPort           = null,
                   HTTPServer?            HTTPServer         = null,
@@ -219,7 +221,8 @@ namespace cloud.charging.open.EV
                   LogLevel               ConsoleLogLevel    = LogLevel.Info,
                   String?                LogPath            = null,
                   Boolean                BridgeDebugLog     = true,
-                  TimeProvider?          TimeProvider       = null)
+                  TimeProvider?          TimeProvider       = null,
+                  SSHSettings?           SSH                = null)
 
             : base(Kind:               EVKind,
                    Version:            typeof(EV).Assembly.GetName().Version?.ToString(3) ?? "0.0.0",
@@ -242,7 +245,8 @@ namespace cloud.charging.open.EV
                    ConsoleLogLevel:    ConsoleLogLevel,
                    LogPath:            LogPath,
                    BridgeDebugLog:     BridgeDebugLog,
-                   TimeProvider:       TimeProvider)
+                   TimeProvider:       TimeProvider,
+                   SSH:                SSH)
 
         {
 
