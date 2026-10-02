@@ -532,17 +532,38 @@ namespace cloud.charging.open.EV
         /// Stop listening, let go of what is this vehicle's own, and then of
         /// the rest.
         /// </summary>
+        /// <remarks>
+        /// Let go of even where stopping fails, which is thrown on afterwards:
+        /// a vehicle whose stop threw used to keep the locks of its session
+        /// and of its discovery, and everything of the node below, its log
+        /// file among it.
+        /// </remarks>
         public override async ValueTask DisposeAsync()
         {
 
-            // Stopped here as well as below: the locks may not go before the
-            // session and the discovery that might be holding them have.
-            await Stop();
+            try
+            {
 
-            sessionLock.  Dispose();
-            discoveryLock.Dispose();
+                // Stopped here as well as below: the locks may not go before
+                // the session and the discovery that might be holding them
+                // have.
+                await Stop();
 
-            await base.DisposeAsync();
+            }
+            finally
+            {
+
+                try
+                {
+                    sessionLock.  Dispose();
+                    discoveryLock.Dispose();
+                }
+                finally
+                {
+                    await base.DisposeAsync();
+                }
+
+            }
 
         }
 
