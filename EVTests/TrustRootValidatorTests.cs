@@ -123,7 +123,7 @@ namespace cloud.charging.open.EV.Tests
             using var root = Root("An Old Root", ValidForDays: 1, StartsInDays: -10);
 
             Assert.That(store.Import(Pem(root), CertificateKind.V2GRoot, null, null, out _, out var error),
-                        Is.True, error, "an expired certificate may be imported - knowing it is there is the point");
+                        Is.True, $"an expired certificate may be imported - knowing it is there is the point: {error}");
 
             Assert.That(EV.ValidatorFor(store, CertificateKind.V2GRoot, log), Is.Null,
                         "an expired root vouches for nothing, so there is nothing to validate against");
