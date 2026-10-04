@@ -57,10 +57,11 @@ building HTML safely, the router, where the pages are mounted, asking before a
 page's changes are left behind, how the node is asked and what every node
 answers, the log the pages follow, and who is signed in - is WWCP_Node's, in
 its `Frontend/src`, and bundled in as `@node/...`. What is the vehicle's is
-what it adds: `main.ts` names its menu, its pages and its own words on the
-Certificates page, `api/client.ts` its routes, and `styles/app.scss` its
-colour. So a new WWCP_Node can change the vehicle's pages without a line
-changed here, which is why the build counts those files among its inputs.
+what it adds: `main.ts` names its menu and its pages, `certificates.ts` its own
+words on the Certificates page, `api/client.ts` its routes, and
+`styles/app.scss` its colour. So a new WWCP_Node can change the vehicle's pages
+without a line changed here, which is why the build counts those files among
+its inputs.
 
 The vehicle's own pages are held to what every page of every kind of node is:
 `src/pages/pages.test.ts` puts them under the rules of WWCP_Node's
@@ -99,7 +100,12 @@ one refused keeps what is typed and says why, and Reload says what the vehicle
 has in every form. `src/pages/*.test.ts` draw each page in a document of
 happy-dom against a stand-in vehicle, `test/vehicle.ts`, and ask exactly that
 of it, the focus as Chrome takes it from a control switched off while saving
-included, with `chromeTakesTheFocus` of WWCP_Node's `test/dom.ts`.
+included, with `chromeTakesTheFocus` of WWCP_Node's `test/dom.ts`. And
+`src/certificates.test.ts` draws every node's Certificates page with the
+vehicle's words, templates of `view.ts` as the page's own: that none of its
+roots is chosen for a session, that a session's certificates are chosen on the
+Charging page, linked to, what an unencrypted key lets somebody take, and the
+certificate a session takes marked as chosen.
 
 `dotnet build -p:SkipFrontendBuild=true` leaves the npm step out and reuses
 whatever is already in `dist/` - or, where nothing is, builds a vehicle with no
