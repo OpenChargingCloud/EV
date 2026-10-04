@@ -1,12 +1,12 @@
 import { api, type DiscoveryResult, type SECC, type SlacResult, type V2GConfiguration, type V2GUpdate } from '../api/client';
 import { auth } from '../auth';
 import { toURL } from '@node/basePath';
-import { keepDrafts } from '@node/drafts';
-import { html, must, render, type HTMLFragment } from '@node/html';
+import { html as stringHTML, must } from '@node/html';
 import type { Page } from '@node/router';
 import { mayButNot, shell } from '@node/shell';
 import { errorMessage, formatValue, numberField, whileSaving } from '@node/ui';
 import { typedSinceDrawn, unsaved } from '@node/unsaved';
+import { html, nothing, render, repeat, type TemplateResult } from '@node/view';
 
 /**
  * How long this page waits on top of the deadline the vehicle was given.
@@ -31,6 +31,10 @@ const andABitMore = 5;
  *
  * Nothing on this page starts a charging session. Discovery asks a question;
  * it connects to nothing and draws nothing.
+ *
+ * Drawn by view.ts: a draw changes only what differs, so that what is typed
+ * into one of its two forms - and its focus - outlives the other being saved,
+ * or a discovery or a pairing being drawn.
  */
 export const v2gPage: Page = {
 
@@ -42,14 +46,14 @@ export const v2gPage: Page = {
             active:    '/configuration/v2g',
             title:     'ISO 15118',
             subtitle:  'The wire below the charging cable: which interface this vehicle speaks V2G on, and who is on it.',
-            actions:   html`<button type="button" id="reload" class="btn small">Reload</button>`
+            actions:   stringHTML`<button type="button" id="reload" class="btn small">Reload</button>`
         });
 
         render(content, html`<div class="loading">Loading ...</div>`);
 
         must<HTMLButtonElement>(root, '#reload').addEventListener('click', () => {
             if (unsaved.mayBeLost())
-                void load();
+                void reload();
         });
 
         const mayChange = auth.can('v2g', 'edit');
@@ -76,7 +80,7 @@ export const v2gPage: Page = {
 
             render(content, html`
 
-                ${mayRun ? '' : html`
+                ${mayRun ? nothing : html`
                     <div class="notice">
                         ${mayButNot('look at this page', 'send anything on the link')}
                     </div>
@@ -89,7 +93,8 @@ export const v2gPage: Page = {
                         <h2><i class="fa-solid fa-tower-broadcast"></i> Look for a station</h2>
 
                         <div class="form-actions">
-                            <button type="button" id="discover" class="btn primary" ${mayRun && !searching ? '' : html`disabled`}>
+                            <button type="button" id="discover" class="btn primary" ?disabled=${!mayRun || searching}
+                                    @click=${() => void discover()}>
                                 ${searching ? 'Asking the link ...' : 'Look for a station'}
                             </button>
                             <span id="discover-error" class="form-error" role="alert"></span>
@@ -107,7 +112,7 @@ export const v2gPage: Page = {
                             Nothing is connected to and no session is started.
                         </p>
 
-                        ${found ? discovery(found) : ''}
+                        ${found ? discovery(found) : nothing}
 
                     </section>
 
@@ -116,7 +121,8 @@ export const v2gPage: Page = {
                         <h2><i class="fa-solid fa-plug-circle-bolt"></i> Pair over SLAC</h2>
 
                         <div class="form-actions">
-                            <button type="button" id="pair" class="btn" ${mayRun && !pairing ? '' : html`disabled`}>
+                            <button type="button" id="pair" class="btn" ?disabled=${!mayRun || pairing}
+                                    @click=${() => void pair()}>
                                 ${pairing ? 'Sounding ...' : 'Pair over SLAC'}
                             </button>
                             <span id="pair-error" class="form-error" role="alert"></span>
@@ -136,7 +142,7 @@ export const v2gPage: Page = {
                             SDP finding nothing is a very different link from SLAC never agreeing at all.
                         </p>
 
-                        ${paired ? pairingResult(paired) : ''}
+                        ${paired ? pairingResult(paired) : nothing}
 
                     </section>
 
@@ -144,15 +150,15 @@ export const v2gPage: Page = {
 
                         <h2><i class="fa-solid fa-ethernet"></i> Interface</h2>
 
-                        <form id="interface-form" class="form-stack">
+                        <form id="interface-form" class="form-stack" @submit=${saveInterface}>
 
                             <label>The interface the station is on
-                                <select name="interface" ${mayChange ? '' : html`disabled`}>
-                                    <option value="" ${configuration.interface === null ? html`selected` : ''}>
+                                <select name="interface" ?disabled=${!mayChange}>
+                                    <option value="" ?selected=${configuration.interface === null}>
                                         the first one that could carry it
                                     </option>
-                                    ${candidates.map(candidate => html`
-                                        <option value="${candidate.name}" ${configuration.interface === candidate.name ? html`selected` : ''}>
+                                    ${repeat(candidates, candidate => candidate.name, candidate => html`
+                                        <option value="${candidate.name}" ?selected=${configuration.interface === candidate.name}>
                                             ${candidate.name}
                                         </option>
                                     `)}
@@ -160,7 +166,7 @@ export const v2gPage: Page = {
                             </label>
 
                             <div class="form-actions">
-                                <button type="submit" class="btn primary" ${mayChange ? '' : html`disabled`}>Save</button>
+                                <button type="submit" class="btn primary" ?disabled=${!mayChange}>Save</button>
                                 <span id="interface-note"  class="form-notice" role="status"></span>
                                 <span id="interface-error" class="form-error"  role="alert"></span>
                             </div>
@@ -183,7 +189,7 @@ export const v2gPage: Page = {
                                 `
                               : html`
                                   <div class="kv-list">
-                                      ${candidates.map(candidate => html`
+                                      ${repeat(candidates, candidate => candidate.name, candidate => html`
                                           <div class="kv">
                                               <span class="k">${candidate.name}</span>
                                               <span class="v">
@@ -201,54 +207,54 @@ export const v2gPage: Page = {
 
                         <h2><i class="fa-solid fa-sliders"></i> What to ask for</h2>
 
-                        <form id="settings-form" class="form-stack">
+                        <form id="settings-form" class="form-stack" @submit=${saveSettings}>
 
                             <label>Security
-                                <select name="requestedSecurity" ${mayChange ? '' : html`disabled`}>
-                                    <option value="tls"   ${settings.requestedSecurity === 'tls'   ? html`selected` : ''}>TLS</option>
-                                    <option value="noTls" ${settings.requestedSecurity === 'noTls' ? html`selected` : ''}>no TLS</option>
+                                <select name="requestedSecurity" ?disabled=${!mayChange}>
+                                    <option value="tls"   ?selected=${settings.requestedSecurity === 'tls'}>TLS</option>
+                                    <option value="noTls" ?selected=${settings.requestedSecurity === 'noTls'}>no TLS</option>
                                 </select>
                             </label>
 
                             <label>Wait for an answer, in milliseconds
                                 <input type="number" name="perAttemptTimeoutMs" min="10" max="60000" step="10"
                                        value="${Math.round(settings.perAttemptTimeoutSeconds * 1000)}"
-                                       ${mayChange ? '' : html`disabled`} />
+                                       ?disabled=${!mayChange} />
                             </label>
 
                             <label>Ask at most this many times
                                 <input type="number" name="maxRetries" min="1" max="1000" step="1"
-                                       value="${settings.maxRetries}" ${mayChange ? '' : html`disabled`} />
+                                       value="${settings.maxRetries}" ?disabled=${!mayChange} />
                             </label>
 
                             <label>Give up after, in seconds
                                 <input type="number" name="totalDeadlineSeconds" min="0.1" max="600" step="0.1"
-                                       value="${settings.totalDeadlineSeconds}" ${mayChange ? '' : html`disabled`} />
+                                       value="${settings.totalDeadlineSeconds}" ?disabled=${!mayChange} />
                             </label>
 
                             <label class="switch">
                                 <input type="checkbox" name="rejectNoTLSResponses"
-                                       ${settings.rejectNoTLSResponses ? html`checked` : ''}
-                                       ${mayChange ? '' : html`disabled`} />
+                                       ?checked=${settings.rejectNoTLSResponses}
+                                       ?disabled=${!mayChange} />
                                 <span>refuse a station that answers "no TLS" to a request for TLS</span>
                             </label>
 
                             <label class="switch">
                                 <input type="checkbox" name="requireLinkLocalSECCAddress"
-                                       ${settings.requireLinkLocalSECCAddress ? html`checked` : ''}
-                                       ${mayChange ? '' : html`disabled`} />
+                                       ?checked=${settings.requireLinkLocalSECCAddress}
+                                       ?disabled=${!mayChange} />
                                 <span>refuse an answer naming an address that is not link-local</span>
                             </label>
 
                             <label class="switch">
                                 <input type="checkbox" name="multicastLoopback"
-                                       ${settings.multicastLoopback ? html`checked` : ''}
-                                       ${mayChange ? '' : html`disabled`} />
+                                       ?checked=${settings.multicastLoopback}
+                                       ?disabled=${!mayChange} />
                                 <span>hear this machine's own answers</span>
                             </label>
 
                             <div class="form-actions">
-                                <button type="submit" class="btn primary" ${mayChange ? '' : html`disabled`}>Save</button>
+                                <button type="submit" class="btn primary" ?disabled=${!mayChange}>Save</button>
                                 <span id="settings-note"  class="form-notice" role="status"></span>
                                 <span id="settings-error" class="form-error"  role="alert"></span>
                             </div>
@@ -269,13 +275,11 @@ export const v2gPage: Page = {
 
             `);
 
-            wire();
-
         }
 
 
         /** What came back, or what did not. */
-        function discovery(result: DiscoveryResult): HTMLFragment {
+        function discovery(result: DiscoveryResult): TemplateResult {
 
             const good = result.outcome === 'found';
 
@@ -287,14 +291,14 @@ export const v2gPage: Page = {
                             <span class="k">Result</span>
                             <span class="v">${outcome(result)}</span>
                         </div>
-                        ${result.interface  ? html`<div class="kv"><span class="k">Interface</span><span class="v"><code>${result.interface}</code></span></div>` : ''}
-                        ${result.startedAt  ? html`<div class="kv"><span class="k">At</span><span class="v">${formatValue(result.startedAt)}</span></div>` : ''}
-                        ${result.attempts !== undefined  ? html`<div class="kv"><span class="k">Requests sent</span><span class="v">${result.attempts}</span></div>` : ''}
-                        ${result.elapsed_ms !== undefined ? html`<div class="kv"><span class="k">Took</span><span class="v">${result.elapsed_ms} ms</span></div>` : ''}
-                        ${result.error      ? html`<div class="kv"><span class="k">Error</span><span class="v">${result.error}</span></div>` : ''}
+                        ${result.interface  ? html`<div class="kv"><span class="k">Interface</span><span class="v"><code>${result.interface}</code></span></div>` : nothing}
+                        ${result.startedAt  ? html`<div class="kv"><span class="k">At</span><span class="v">${formatValue(result.startedAt)}</span></div>` : nothing}
+                        ${result.attempts !== undefined  ? html`<div class="kv"><span class="k">Requests sent</span><span class="v">${result.attempts}</span></div>` : nothing}
+                        ${result.elapsed_ms !== undefined ? html`<div class="kv"><span class="k">Took</span><span class="v">${result.elapsed_ms} ms</span></div>` : nothing}
+                        ${result.error      ? html`<div class="kv"><span class="k">Error</span><span class="v">${result.error}</span></div>` : nothing}
                     </div>
 
-                    ${result.secc ? html`<h3>The station</h3>${station(result.secc)}` : ''}
+                    ${result.secc ? html`<h3>The station</h3>${station(result.secc)}` : nothing}
 
                     ${result.others && result.others.length > 0
                           ? html`
@@ -306,14 +310,14 @@ export const v2gPage: Page = {
                                   is usually a surprise worth knowing about.
                               </p>
                             `
-                          : ''}
+                          : nothing}
 
                     ${result.rejected && result.rejected.length > 0
                           ? html`
                               <h3>Answers that were refused</h3>
                               ${result.rejected.map(station)}
                             `
-                          : ''}
+                          : nothing}
 
                 </div>
             `;
@@ -321,7 +325,7 @@ export const v2gPage: Page = {
         }
 
         /** One station, as SDP described it. */
-        function station(secc: SECC): HTMLFragment {
+        function station(secc: SECC): TemplateResult {
 
             return html`
                 <div class="kv-list">
@@ -333,8 +337,8 @@ export const v2gPage: Page = {
                         <span class="k">Security</span>
                         <span class="v">${secc.security === 'tls' ? 'TLS' : 'no TLS'} over ${secc.transport}</span>
                     </div>
-                    ${secc.from   ? html`<div class="kv"><span class="k">Answered from</span><span class="v"><code>${secc.from}</code></span></div>` : ''}
-                    ${secc.reason ? html`<div class="kv"><span class="k">Refused because</span><span class="v">${secc.reason}</span></div>` : ''}
+                    ${secc.from   ? html`<div class="kv"><span class="k">Answered from</span><span class="v"><code>${secc.from}</code></span></div>` : nothing}
+                    ${secc.reason ? html`<div class="kv"><span class="k">Refused because</span><span class="v">${secc.reason}</span></div>` : nothing}
                 </div>
             `;
 
@@ -358,7 +362,7 @@ export const v2gPage: Page = {
 
 
         /** What came of one pairing. */
-        function pairingResult(result: SlacResult): HTMLFragment {
+        function pairingResult(result: SlacResult): TemplateResult {
 
             return html`
                 <div class="query-result ${result.outcome === 'paired' ? 'ok' : 'bad'}">
@@ -370,10 +374,10 @@ export const v2gPage: Page = {
                           : result.outcome === 'cancelled'     ? 'cancelled'
                           :                                      'the pairing failed'
                         }</span></div>
-                        ${result.peer       ? html`<div class="kv"><span class="k">Peer</span><span class="v"><code>${result.peer}</code></span></div>` : ''}
-                        ${result.nid        ? html`<div class="kv"><span class="k">Network</span><span class="v"><code>${result.nid}</code></span></div>` : ''}
-                        ${result.elapsed_ms !== undefined ? html`<div class="kv"><span class="k">Took</span><span class="v">${result.elapsed_ms} ms</span></div>` : ''}
-                        ${result.error      ? html`<div class="kv"><span class="k">Error</span><span class="v">${result.error}</span></div>` : ''}
+                        ${result.peer       ? html`<div class="kv"><span class="k">Peer</span><span class="v"><code>${result.peer}</code></span></div>` : nothing}
+                        ${result.nid        ? html`<div class="kv"><span class="k">Network</span><span class="v"><code>${result.nid}</code></span></div>` : nothing}
+                        ${result.elapsed_ms !== undefined ? html`<div class="kv"><span class="k">Took</span><span class="v">${result.elapsed_ms} ms</span></div>` : nothing}
+                        ${result.error      ? html`<div class="kv"><span class="k">Error</span><span class="v">${result.error}</span></div>` : nothing}
                     </div>
                 </div>
             `;
@@ -381,50 +385,45 @@ export const v2gPage: Page = {
         }
 
 
-        function wire(): void {
+        function saveInterface(event: SubmitEvent): void {
 
-            must<HTMLButtonElement>(content, '#discover').addEventListener('click', () => void discover());
-            must<HTMLButtonElement>(content, '#pair').    addEventListener('click', () => void pair());
+            event.preventDefault();
 
-            must<HTMLFormElement>(content, '#interface-form').addEventListener('submit', event => {
+            const form   = event.currentTarget as HTMLFormElement;
+            const chosen = String(new FormData(form).get('interface') ?? '').trim();
 
-                event.preventDefault();
+            // An empty selection means "the first one that could carry it".
+            // That is sent as an explicit null rather than as "" or as nothing
+            // at all: a missing field leaves the setting alone, and "" would be
+            // a name, of which there is no such interface.
+            void save(form, 'interface', { interface: chosen.length > 0 ? chosen : null });
 
-                const chosen = String(new FormData(event.target as HTMLFormElement).get('interface') ?? '').trim();
+        }
 
-                // An empty selection means "the first one that could carry it".
-                // That is sent as an explicit null rather than as "" or as
-                // nothing at all: a missing field leaves the setting alone, and
-                // "" would be a name, of which there is no such interface.
-                void save('interface', { interface: chosen.length > 0 ? chosen : null });
 
-            });
+        function saveSettings(event: SubmitEvent): void {
 
-            must<HTMLFormElement>(content, '#settings-form').addEventListener('submit', event => {
+            event.preventDefault();
 
-                event.preventDefault();
+            const form = event.currentTarget as HTMLFormElement;
+            const data = new FormData(form);
 
-                const form = event.target as HTMLFormElement;
-                const data = new FormData(form);
-
-                // An emptied number is NaN here and null on the wire, which
-                // the vehicle reads as "not given": what it had stays.
-                void save('settings', {
-                    requestedSecurity:            String(data.get('requestedSecurity') ?? 'tls') === 'noTls' ? 'noTls' : 'tls',
-                    perAttemptTimeoutSeconds:     numberField(form, 'perAttemptTimeoutMs') / 1000,
-                    maxRetries:                   numberField(form, 'maxRetries'),
-                    totalDeadlineSeconds:         numberField(form, 'totalDeadlineSeconds'),
-                    rejectNoTLSResponses:         data.get('rejectNoTLSResponses')        !== null,
-                    requireLinkLocalSECCAddress:  data.get('requireLinkLocalSECCAddress') !== null,
-                    multicastLoopback:            data.get('multicastLoopback')           !== null
-                });
-
+            // An emptied number is NaN here and null on the wire, which the
+            // vehicle reads as "not given": what it had stays.
+            void save(form, 'settings', {
+                requestedSecurity:            String(data.get('requestedSecurity') ?? 'tls') === 'noTls' ? 'noTls' : 'tls',
+                perAttemptTimeoutSeconds:     numberField(form, 'perAttemptTimeoutMs') / 1000,
+                maxRetries:                   numberField(form, 'maxRetries'),
+                totalDeadlineSeconds:         numberField(form, 'totalDeadlineSeconds'),
+                rejectNoTLSResponses:         data.get('rejectNoTLSResponses')        !== null,
+                requireLinkLocalSECCAddress:  data.get('requireLinkLocalSECCAddress') !== null,
+                multicastLoopback:            data.get('multicastLoopback')           !== null
             });
 
         }
 
 
-        async function save(which: 'interface' | 'settings', update: V2GUpdate): Promise<void> {
+        async function save(form: HTMLFormElement, which: 'interface' | 'settings', update: V2GUpdate): Promise<void> {
 
             const note = must<HTMLElement>(content, `#${which}-note`);
 
@@ -435,8 +434,17 @@ export const v2gPage: Page = {
             try
             {
                 current = await whileSaving(content, note, () => api.v2g.save(update));
-                keepDrafts(content, `${which}-form`, draw);
-                must<HTMLElement>(content, `#${which}-note`).textContent = 'Saved, and in effect for the next discovery.';
+
+                if (cancelled)
+                    return;
+
+                draw();
+
+                // A draw leaves a form as it is typed into; this one was
+                // saved, so it goes back to what it says now - the answer.
+                form.reset();
+
+                note.textContent = 'Saved, and in effect for the next discovery.';
             }
             catch (problem)
             {
@@ -451,7 +459,7 @@ export const v2gPage: Page = {
             must<HTMLElement>(content, '#discover-error').textContent = '';
 
             searching = true;
-            keepDrafts(content, null, draw);
+            draw();
 
             try
             {
@@ -463,13 +471,13 @@ export const v2gPage: Page = {
             catch (problem)
             {
                 searching = false;
-                keepDrafts(content, null, draw);
+                draw();
                 must<HTMLElement>(content, '#discover-error').textContent = errorMessage(problem);
                 return;
             }
 
             searching = false;
-            keepDrafts(content, null, draw);
+            draw();
 
         }
 
@@ -482,7 +490,7 @@ export const v2gPage: Page = {
             // as the discovery's does.
             paired  = null;
             pairing = true;
-            keepDrafts(content, null, draw);
+            draw();
 
             try
             {
@@ -491,13 +499,13 @@ export const v2gPage: Page = {
             catch (problem)
             {
                 pairing = false;
-                keepDrafts(content, null, draw);
+                draw();
                 must<HTMLElement>(content, '#pair-error').textContent = errorMessage(problem);
                 return;
             }
 
             pairing = false;
-            keepDrafts(content, null, draw);
+            draw();
 
         }
 
@@ -520,6 +528,19 @@ export const v2gPage: Page = {
                         <div class="error-box">The ISO 15118 configuration could not be loaded: ${errorMessage(problem)}</div>
                     `);
             }
+
+        }
+
+        /**
+         * Loaded anew - Reload - is what the vehicle has, the forms too, which
+         * a draw on its own would leave as typed.
+         */
+        async function reload(): Promise<void> {
+
+            await load();
+
+            if (!cancelled)
+                content.querySelectorAll('form').forEach(form => form.reset());
 
         }
 

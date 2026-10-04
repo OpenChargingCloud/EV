@@ -65,10 +65,13 @@ changed here, which is why the build counts those files among its inputs.
 The vehicle's own pages are held to what every page of every kind of node is:
 `src/pages/pages.test.ts` puts them under the rules of WWCP_Node's
 `test/pages.ts` - a page with a form says whether it holds a draft and holds
-every form it has, its Reload asks first, it draws itself anew through
-`keepDrafts` and not with a second `draw()`, the form it names there as the one
-saved is one it has, and every form has an id or a data-id to be known by. A
-page reads its numbers with `numberField`, with a form or without, so that an
+every form it has, its Reload asks first, and every form has an id or a data-id
+to be known by. They draw through WWCP_Node's `view.ts`, on lit-html, as the
+shared pages do, and are held to the rules of that: an attribute that is there
+or not is bound - `?disabled`, `?checked`, `?selected` - rather than said as
+text in a tag, nothing is put between a textarea's tags, every pattern is
+written as Chrome reads it, and there is neither `keepDrafts` nor `innerHTML`.
+A page reads its numbers with `numberField`, with a form or without, so that an
 emptied field goes out as "not given" and not as a zero. Its links go through
 `toURL`, so that they stay below the base the vehicle is mounted at; its look
 comes from the stylesheet, since a `style` attribute is dropped by the policy
@@ -87,11 +90,16 @@ by their directories: a build with `--artifacts-path` has a directory named
 after each project below `artifacts/bin`, where the rule would have read
 nothing and passed. `dotnet test` runs it, and the CI with it.
 
-And where a page draws itself anew - after one of its forms is saved, or a
-discovery or a pairing has answered - what is typed into its other forms stays:
-`keepDrafts` puts it back. It began on the vehicle's pages and is WWCP_Node's
-now, in its `drafts.ts`, for the pages of every kind of node, and so are the
-tests that say what it keeps and what it leaves as drawn.
+And where a page draws itself anew - after one of its forms is saved, a
+discovery or a pairing has answered, or every two seconds while a session runs:
+a draw changes only what differs, so that a field typed into is the same
+element afterwards, with what is typed, its focus and its cursor. A form whose
+save went through says what the vehicle took (`form.reset()` after the draw),
+one refused keeps what is typed and says why, and Reload says what the vehicle
+has in every form. `src/pages/*.test.ts` draw each page in a document of
+happy-dom against a stand-in vehicle, `test/vehicle.ts`, and ask exactly that
+of it, the focus as Chrome takes it from a control switched off while saving
+included, with `chromeTakesTheFocus` of WWCP_Node's `test/dom.ts`.
 
 `dotnet build -p:SkipFrontendBuild=true` leaves the npm step out and reuses
 whatever is already in `dist/` - or, where nothing is, builds a vehicle with no

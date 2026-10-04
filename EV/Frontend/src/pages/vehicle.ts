@@ -1,11 +1,11 @@
 import { api, type VehicleConfiguration, type VehicleUpdate } from '../api/client';
 import { auth } from '../auth';
-import { keepDrafts } from '@node/drafts';
-import { html, must, render } from '@node/html';
+import { html as stringHTML, must } from '@node/html';
 import type { Page } from '@node/router';
 import { mayButNot, shell } from '@node/shell';
 import { errorMessage, numberField, whileSaving } from '@node/ui';
 import { typedSinceDrawn, unsaved } from '@node/unsaved';
+import { html, nothing, render } from '@node/view';
 
 /**
  * What this vehicle is, and what its battery wants.
@@ -19,6 +19,9 @@ import { typedSinceDrawn, unsaved } from '@node/unsaved';
  * modes - "9 kW" is an EVMaxCurrent in -2 AC and an EVTargetCurrent in -20 DC
  * - so they are kept here as what a driver would say and translated by the
  * session, not by this page.
+ *
+ * Drawn by view.ts: a draw changes only what differs, so that what is typed
+ * into one of its two forms - and its focus - outlives the other being saved.
  */
 export const vehiclePage: Page = {
 
@@ -30,7 +33,7 @@ export const vehiclePage: Page = {
             active:    '/configuration/vehicle',
             title:     'Vehicle',
             subtitle:  'What this vehicle is, and what its battery asks a station for.',
-            actions:   html`<button type="button" id="reload" class="btn small">Reload</button>`
+            actions:   stringHTML`<button type="button" id="reload" class="btn small">Reload</button>`
         });
 
         render(content, html`<div class="loading">Loading ...</div>`);
@@ -39,7 +42,7 @@ export const vehiclePage: Page = {
         // does, and from the opposite corner of the screen, so it asks first.
         must<HTMLButtonElement>(root, '#reload').addEventListener('click', () => {
             if (unsaved.mayBeLost())
-                void load();
+                void reload();
         });
 
         const mayChange = auth.can('vehicle', 'edit');
@@ -58,7 +61,7 @@ export const vehiclePage: Page = {
 
             render(content, html`
 
-                ${mayChange ? '' : html`
+                ${mayChange ? nothing : html`
                     <div class="notice">
                         ${mayButNot('look at this vehicle', 'change it')}
                     </div>
@@ -70,22 +73,22 @@ export const vehiclePage: Page = {
 
                         <h2><i class="fa-solid fa-car-side"></i> Identity</h2>
 
-                        <form id="identity-form" class="form-stack">
+                        <form id="identity-form" class="form-stack" @submit=${saveIdentity}>
 
                             <label>Name
                                 <input type="text" name="name" value="${configuration.name}"
                                        maxlength="${configuration.limits.maxNameLength}"
-                                       placeholder="EV" ${mayChange ? '' : html`disabled`} />
+                                       placeholder="EV" ?disabled=${!mayChange} />
                             </label>
 
                             <label>Vehicle identification number
                                 <input type="text" name="vin" value="${configuration.vin ?? ''}"
                                        maxlength="${configuration.limits.maxNameLength}"
-                                       placeholder="WVWZZZ..." ${mayChange ? '' : html`disabled`} />
+                                       placeholder="WVWZZZ..." ?disabled=${!mayChange} />
                             </label>
 
                             <div class="form-actions">
-                                <button type="submit" class="btn primary" ${mayChange ? '' : html`disabled`}>Save</button>
+                                <button type="submit" class="btn primary" ?disabled=${!mayChange}>Save</button>
                                 <span id="identity-note"  class="form-notice" role="status"></span>
                                 <span id="identity-error" class="form-error"  role="alert"></span>
                             </div>
@@ -104,37 +107,37 @@ export const vehiclePage: Page = {
 
                         <h2><i class="fa-solid fa-battery-half"></i> Battery</h2>
 
-                        <form id="battery-form" class="form-stack">
+                        <form id="battery-form" class="form-stack" @submit=${saveBattery}>
 
                             <label>Usable capacity in kWh
                                 <input type="number" name="batteryCapacityKWh" min="0.1" step="0.1"
                                        max="${configuration.limits.maxCapacityKWh}"
-                                       value="${battery.capacityKWh}" ${mayChange ? '' : html`disabled`} />
+                                       value="${battery.capacityKWh}" ?disabled=${!mayChange} />
                             </label>
 
                             <label>State of charge at plug-in, in percent
                                 <input type="number" name="stateOfChargePercent" min="0" max="100" step="1"
-                                       value="${battery.stateOfChargePercent}" ${mayChange ? '' : html`disabled`} />
+                                       value="${battery.stateOfChargePercent}" ?disabled=${!mayChange} />
                             </label>
 
                             <label>Charge until, in percent
                                 <input type="number" name="targetStateOfChargePercent" min="0" max="100" step="1"
-                                       value="${battery.targetStateOfChargePercent}" ${mayChange ? '' : html`disabled`} />
+                                       value="${battery.targetStateOfChargePercent}" ?disabled=${!mayChange} />
                             </label>
 
                             <label>Ask for, in kW
                                 <input type="number" name="maxChargingPowerKW" min="0.1" step="0.1"
                                        max="${configuration.limits.maxPowerKW}"
-                                       value="${battery.maxChargingPowerKW}" ${mayChange ? '' : html`disabled`} />
+                                       value="${battery.maxChargingPowerKW}" ?disabled=${!mayChange} />
                             </label>
 
                             <label>Start asking for less from, in percent
                                 <input type="number" name="taperFromPercent" min="0" max="100" step="1"
-                                       value="${battery.taperFromPercent}" ${mayChange ? '' : html`disabled`} />
+                                       value="${battery.taperFromPercent}" ?disabled=${!mayChange} />
                             </label>
 
                             <div class="form-actions">
-                                <button type="submit" class="btn primary" ${mayChange ? '' : html`disabled`}>Save</button>
+                                <button type="submit" class="btn primary" ?disabled=${!mayChange}>Save</button>
                                 <span id="battery-note"  class="form-notice" role="status"></span>
                                 <span id="battery-error" class="form-error"  role="alert"></span>
                             </div>
@@ -155,49 +158,45 @@ export const vehiclePage: Page = {
 
             `);
 
-            wire();
-
         }
 
 
-        function wire(): void {
+        function saveIdentity(event: SubmitEvent): void {
 
-            must<HTMLFormElement>(content, '#identity-form').addEventListener('submit', event => {
+            event.preventDefault();
 
-                event.preventDefault();
+            const form = event.currentTarget as HTMLFormElement;
+            const data = new FormData(form);
 
-                const data = new FormData(event.target as HTMLFormElement);
-
-                void save('identity', {
-                    name:  String(data.get('name') ?? '').trim(),
-                    vin:   String(data.get('vin')  ?? '').trim()
-                });
-
-            });
-
-            must<HTMLFormElement>(content, '#battery-form').addEventListener('submit', event => {
-
-                event.preventDefault();
-
-                const form = event.target as HTMLFormElement;
-
-                // An emptied number is NaN here and null on the wire, which
-                // the vehicle reads as "not given": what it had stays - where
-                // Number() made it 0, which is a state of charge of 0 %.
-                void save('battery', {
-                    batteryCapacityKWh:          numberField(form, 'batteryCapacityKWh'),
-                    stateOfChargePercent:        numberField(form, 'stateOfChargePercent'),
-                    targetStateOfChargePercent:  numberField(form, 'targetStateOfChargePercent'),
-                    maxChargingPowerKW:          numberField(form, 'maxChargingPowerKW'),
-                    taperFromPercent:            numberField(form, 'taperFromPercent')
-                });
-
+            void save(form, 'identity', {
+                name:  String(data.get('name') ?? '').trim(),
+                vin:   String(data.get('vin')  ?? '').trim()
             });
 
         }
 
 
-        async function save(which: 'identity' | 'battery', update: VehicleUpdate): Promise<void> {
+        function saveBattery(event: SubmitEvent): void {
+
+            event.preventDefault();
+
+            const form = event.currentTarget as HTMLFormElement;
+
+            // An emptied number is NaN here and null on the wire, which the
+            // vehicle reads as "not given": what it had stays - where Number()
+            // made it 0, which is a state of charge of 0 %.
+            void save(form, 'battery', {
+                batteryCapacityKWh:          numberField(form, 'batteryCapacityKWh'),
+                stateOfChargePercent:        numberField(form, 'stateOfChargePercent'),
+                targetStateOfChargePercent:  numberField(form, 'targetStateOfChargePercent'),
+                maxChargingPowerKW:          numberField(form, 'maxChargingPowerKW'),
+                taperFromPercent:            numberField(form, 'taperFromPercent')
+            });
+
+        }
+
+
+        async function save(form: HTMLFormElement, which: 'identity' | 'battery', update: VehicleUpdate): Promise<void> {
 
             const note = must<HTMLElement>(content, `#${which}-note`);
 
@@ -208,8 +207,17 @@ export const vehiclePage: Page = {
             try
             {
                 current = await whileSaving(content, note, () => api.vehicle.save(update));
-                keepDrafts(content, `${which}-form`, draw);
-                must<HTMLElement>(content, `#${which}-note`).textContent = 'Saved, and in effect from the next session.';
+
+                if (cancelled)
+                    return;
+
+                draw();
+
+                // A draw leaves a form as it is typed into; this one was
+                // saved, so it goes back to what it says now - the answer.
+                form.reset();
+
+                note.textContent = 'Saved, and in effect from the next session.';
             }
             catch (problem)
             {
@@ -237,6 +245,19 @@ export const vehiclePage: Page = {
                         <div class="error-box">The vehicle configuration could not be loaded: ${errorMessage(problem)}</div>
                     `);
             }
+
+        }
+
+        /**
+         * Loaded anew - Reload - is what the vehicle has, the forms too, which
+         * a draw on its own would leave as typed.
+         */
+        async function reload(): Promise<void> {
+
+            await load();
+
+            if (!cancelled)
+                content.querySelectorAll('form').forEach(form => form.reset());
 
         }
 
