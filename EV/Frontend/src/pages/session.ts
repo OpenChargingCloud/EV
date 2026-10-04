@@ -2,9 +2,9 @@ import { api, type Certificate, type CertificateKind, type CertificateStore,
          type SessionBattery, type SessionConfiguration, type SessionRun, type SessionUpdate } from '../api/client';
 import { auth } from '../auth';
 import { toURL } from '@node/basePath';
-import { html as stringHTML, must } from '@node/html';
+import { must } from '@node/html';
 import type { Page } from '@node/router';
-import { mayButNot, shell } from '@node/shell';
+import { mayButNot, reloadButton, shell } from '@node/shell';
 import { errorMessage, formatValue, numberField, whileSaving } from '@node/ui';
 import { typedSinceDrawn, unsaved } from '@node/unsaved';
 import { html, nothing, render, repeat, type TemplateResult } from '@node/view';
@@ -49,15 +49,10 @@ export const sessionPage: Page = {
             active:    '/configuration/session',
             title:     'Charging session',
             subtitle:  'What this vehicle does once it has found a station.',
-            actions:   stringHTML`<button type="button" id="reload" class="btn small">Reload</button>`
+            actions:   reloadButton(() => reload())
         });
 
         render(content, html`<div class="loading">Loading ...</div>`);
-
-        must<HTMLButtonElement>(root, '#reload').addEventListener('click', () => {
-            if (unsaved.mayBeLost())
-                void reload();
-        });
 
         const mayCharge      = auth.can('session', 'run');
         const mayChangeLink  = auth.can('v2g', 'edit');

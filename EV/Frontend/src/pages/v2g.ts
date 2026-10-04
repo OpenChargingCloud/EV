@@ -1,9 +1,9 @@
 import { api, type DiscoveryResult, type SECC, type SlacResult, type V2GConfiguration, type V2GUpdate } from '../api/client';
 import { auth } from '../auth';
 import { toURL } from '@node/basePath';
-import { html as stringHTML, must } from '@node/html';
+import { must } from '@node/html';
 import type { Page } from '@node/router';
-import { mayButNot, shell } from '@node/shell';
+import { mayButNot, reloadButton, shell } from '@node/shell';
 import { errorMessage, formatValue, numberField, whileSaving } from '@node/ui';
 import { typedSinceDrawn, unsaved } from '@node/unsaved';
 import { html, nothing, render, repeat, type TemplateResult } from '@node/view';
@@ -46,15 +46,10 @@ export const v2gPage: Page = {
             active:    '/configuration/v2g',
             title:     'ISO 15118',
             subtitle:  'The wire below the charging cable: which interface this vehicle speaks V2G on, and who is on it.',
-            actions:   stringHTML`<button type="button" id="reload" class="btn small">Reload</button>`
+            actions:   reloadButton(() => reload())
         });
 
         render(content, html`<div class="loading">Loading ...</div>`);
-
-        must<HTMLButtonElement>(root, '#reload').addEventListener('click', () => {
-            if (unsaved.mayBeLost())
-                void reload();
-        });
 
         const mayChange = auth.can('v2g', 'edit');
         const mayRun    = auth.can('v2g', 'run');

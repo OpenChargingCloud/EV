@@ -2,10 +2,11 @@
  * The vehicle page drawn, in a document of happy-dom, against a stand-in
  * vehicle: what is typed into one of its two forms - and its focus - outlives
  * the other being saved, a form saved says what the vehicle took, and one
- * refused keeps what is typed and says why.
+ * refused keeps what is typed and says why. Its Reload asks first, where
+ * something is typed, and then asks the vehicle again.
  */
 
-import { asked, field, open, refused, submit, until, type Asked } from '../../test/vehicle.ts';
+import { asked, field, open, refused, said, submit, until, type Asked } from '../../test/vehicle.ts';
 import { chromeTakesTheFocus } from '@node/../test/dom.ts';
 
 import { strict as assert }  from 'node:assert';
@@ -145,6 +146,21 @@ describe('the vehicle page', () => {
         await until(() => field(root, '#identity-form', 'name').value === 'Renamed elsewhere', 'Reload did not say what the vehicle has');
 
         assert.equal(field(root, '#battery-form', 'stateOfChargePercent').value, '50');
+
+    });
+
+    it('asks once before its Reload throws away what is typed, and then asks the vehicle again', async () => {
+
+        const root    = await opened();
+        const loads   = () => asked.filter(one => one.method === 'GET' && one.path === '/configuration/vehicle').length;
+        const before  = loads();
+
+        field(root, '#identity-form', 'name').value = 'typed, not saved';
+
+        root.querySelector<HTMLButtonElement>('#reload')!.click();
+        await until(() => loads() === before + 1, 'Reload did not ask the vehicle again');
+
+        assert.equal(said.length, 1, 'Reload did not ask first, or asked more than once');
 
     });
 

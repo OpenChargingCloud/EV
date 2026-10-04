@@ -66,9 +66,10 @@ its inputs.
 The vehicle's own pages are held to what every page of every kind of node is:
 `src/pages/pages.test.ts` puts them under the rules of WWCP_Node's
 `test/pages.ts` - a page with a form says whether it holds a draft and holds
-every form it has, and its Reload asks first. They draw by comparing, through
-WWCP_Node's `view.ts` on lit-html, as the shared pages do, so that what is
-typed into one form outlives saving another, and are held to the rules of
+every form it has. Its Reload is every node's, `reloadButton` of WWCP_Node's
+`shell.ts`, which asks first where something is typed. They draw by comparing,
+through WWCP_Node's `view.ts` on lit-html, as the shared pages do, so that what
+is typed into one form outlives saving another, and are held to the rules of
 that: an attribute that is there or not is bound - `?disabled`, `?checked`,
 `?selected` - rather than said as text in a tag, nothing is put between a
 textarea's tags, every pattern is written as Chrome reads it, and no part of a
@@ -97,18 +98,18 @@ discovery or a pairing has answered, or every two seconds while a session runs:
 a draw changes only what differs, so that a field typed into is the same
 element afterwards, with what is typed, its focus and its cursor. A form whose
 save went through says what the vehicle took (`form.reset()` after the draw),
-one refused keeps what is typed and says why, and Reload says what the vehicle
-has in every form. `src/pages/*.test.ts` draw each page in a document of
-happy-dom against a stand-in vehicle and ask exactly that of it, the focus as
-Chrome takes it from a control switched off while saving included, with
-`chromeTakesTheFocus` of WWCP_Node's `test/dom.ts`. The stand-in is the one
-every kind of node's page tests share, WWCP_Node's `test/node.ts`; all that
-`test/vehicle.ts` adds is that it is the Electric Vehicle, and its user a
-driver. And `src/certificates.test.ts` draws every node's Certificates page
-with the vehicle's words, templates of `view.ts` as the page's own: that none
-of its roots is chosen for a session, that a session's certificates are chosen
-on the Charging page, linked to, what an unencrypted key lets somebody take,
-and the certificate a session takes marked as chosen.
+one refused keeps what is typed and says why, and Reload, once it has asked,
+says what the vehicle has in every form. `src/pages/*.test.ts` draw each page
+in a document of happy-dom against a stand-in vehicle and ask exactly that of
+it, the focus as Chrome takes it from a control switched off while saving
+included, with `chromeTakesTheFocus` of WWCP_Node's `test/dom.ts`. The stand-in
+is the one every kind of node's page tests share, WWCP_Node's `test/node.ts`;
+all that `test/vehicle.ts` adds is that it is the Electric Vehicle, and its
+user a driver. And `src/certificates.test.ts` draws every node's Certificates
+page with the vehicle's words, templates of `view.ts` as the page's own: that
+none of its roots is chosen for a session, that a session's certificates are
+chosen on the Charging page, linked to, what an unencrypted key lets somebody
+take, and the certificate a session takes marked as chosen.
 
 `dotnet build -p:SkipFrontendBuild=true` leaves the npm step out and reuses
 whatever is already in `dist/` - or, where nothing is, builds a vehicle with no
