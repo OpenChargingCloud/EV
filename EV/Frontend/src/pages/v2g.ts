@@ -45,7 +45,7 @@ export const v2gPage: Page = {
         const content = shell(root, {
             active:    '/configuration/v2g',
             title:     'ISO 15118',
-            subtitle:  'The wire below the charging cable: which interface this vehicle speaks V2G on, and who is on it.',
+            subtitle:  'The wire below the charging cable: which interface this vehicle speaks ISO 15118 on, and who is on it.',
             actions:   reloadButton(() => reload())
         });
 
