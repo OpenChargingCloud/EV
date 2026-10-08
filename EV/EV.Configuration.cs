@@ -422,71 +422,98 @@ namespace cloud.charging.open.EV
         #region (protected override) CompleteCertificatesJSON(JSON)
 
         /// <summary>
-        /// Which handle each kind of credential is chosen by for a session,
-        /// beside what every node says about its store - see
+        /// Which certificate each kind of credential is chosen as for a
+        /// session, beside what every node says about its store - see
         /// <see cref="WWCPNode.CertificatesJSON"/> - so that the page can mark
         /// it without also fetching the session settings.
         /// </summary>
         /// <remarks>
         /// The credentials are what a vehicle presents: exactly one of each is
         /// chosen, and that choice is a session setting rather than a property
-        /// of the store.
+        /// of the store. Each is said with the kind its slot wants, so that a
+        /// certificate kept as several kinds is marked in that kind's row
+        /// alone.
         /// </remarks>
         protected override void CompleteCertificatesJSON(JObject JSON)
         {
 
             JSON["chosen"] = new JObject(
-                                 new JProperty("vehicleCertificate",   SessionSettings.VehicleCertificate),
-                                 new JProperty("contractCertificate",  SessionSettings.ContractCertificate),
-                                 new JProperty("oemCertificate",       SessionSettings.OEMCertificate),
-                                 new JProperty("tariffCertificate",    SessionSettings.TariffCertificate)
+                                 Slots.Select(slot => new JProperty(slot.Field,
+                                                                    slot.Handle is null
+                                                                        ? null
+                                                                        : new JObject(
+                                                                              new JProperty("id",    slot.Handle),
+                                                                              new JProperty("kind",  slot.Kind.AsText())
+                                                                          )))
                              );
 
         }
 
         #endregion
 
-        #region (override) WhatUses(Handle)
+        #region (override) WhatUses(Handle, Kind)
 
         /// <summary>
-        /// The session setting that names the certificate of this handle, as the
-        /// sentence a refusal to delete it says - or null where none does.
+        /// The session setting that names the certificate of this handle as the
+        /// kind it would be taken out as, as the sentence a refusal to delete it
+        /// says - or null where none does.
         /// </summary>
         /// <remarks>
         /// Deleting it anyway would leave a vehicle configured to present
         /// something that is not there, which is discovered at the next session
         /// rather than here - and switching it off is what somebody taking a
-        /// certificate out of service usually meant.
+        /// certificate out of service usually meant. Taken out as another kind
+        /// than the one a session names it as, it stays what the session needs.
         /// </remarks>
-        public override String? WhatUses(String Handle)
+        public override String? WhatUses(String            Handle,
+                                          CertificateKind?  Kind)
 
-            => UsedBySession(Handle) is String field
+            => UsedBySession(Handle, Kind) is String field
                    ? $"That certificate is what 'session.{field}' names. Choose another one there " +
                       "first, or switch this one off instead of deleting it."
                    : null;
 
         #endregion
 
-        #region UsedBySession(Handle)
+        #region UsedBySession(Handle, Kind = null)
 
         /// <summary>
-        /// The session setting that names this certificate, or null where none does.
+        /// The session setting that names this certificate as this kind - as
+        /// any kind, where none is given - or null where none does.
         /// </summary>
-        public String? UsedBySession(String? Handle)
+        public String? UsedBySession(String?           Handle,
+                                     CertificateKind?  Kind = null)
         {
 
             if (Handle is null or { Length: 0 })
                 return null;
 
-            var settings = SessionSettings;
-
-            if (settings.VehicleCertificate  == Handle)  return "vehicleCertificate";
-            if (settings.ContractCertificate == Handle)  return "contractCertificate";
-            if (settings.OEMCertificate      == Handle)  return "oemCertificate";
-            if (settings.TariffCertificate   == Handle)  return "tariffCertificate";
+            foreach (var slot in Slots)
+                if (slot.Handle == Handle && (Kind is null || slot.Kind == Kind.Value))
+                    return slot.Field;
 
             return null;
 
+        }
+
+        #endregion
+
+        #region (private) Slots
+
+        /// <summary>
+        /// The session's four credential slots: the setting, the kind it wants,
+        /// and the handle it names.
+        /// </summary>
+        private IEnumerable<(String Field, CertificateKind Kind, String? Handle)> Slots
+        {
+            get
+            {
+                var settings = SessionSettings;
+                yield return ("vehicleCertificate",   CertificateKind.Vehicle,             settings.VehicleCertificate);
+                yield return ("contractCertificate",  CertificateKind.Contract,            settings.ContractCertificate);
+                yield return ("oemCertificate",       CertificateKind.OEMProvisioning,     settings.OEMCertificate);
+                yield return ("tariffCertificate",    CertificateKind.TariffVerification,  settings.TariffCertificate);
+            }
         }
 
         #endregion

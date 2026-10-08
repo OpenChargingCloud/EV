@@ -17,8 +17,11 @@
 
 #region Usings
 
+using System.Net;
+using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
@@ -248,6 +251,64 @@ namespace cloud.charging.open.EV.Tests
 
             Assert.That(chosen["missing"]!.Value<Boolean>(), Is.False, "it is still in the store");
             Assert.That(chosen["usable"]!. Value<Boolean>(), Is.False, "but not as a contract certificate");
+
+        }
+
+        #endregion
+
+        #region ACertificateChosenAsOneKindGoesAsAnotherAndIsMarkedAsTheOneChosen()
+
+        /// <summary>
+        /// One certificate kept as a vehicle and as a contract certificate,
+        /// chosen for the contract's slot: the store says it is chosen as the
+        /// contract certificate, and it may be taken out as the vehicle
+        /// certificate but not as the contract certificate. Asked by its handle
+        /// alone, it was refused as either - and marked chosen in both rows.
+        /// </summary>
+        [Test]
+        public async Task ACertificateChosenAsOneKindGoesAsAnotherAndIsMarkedAsTheOneChosen()
+        {
+
+            Assert.That(vehicle!.Certificates.Import(Credential("EV test credential"), null, "EV test credential",
+                                                     [ new CertificateRegistration(CertificateKind.Vehicle),
+                                                       new CertificateRegistration(CertificateKind.Contract) ],
+                                                     out var entries, out var error, out _),
+                        Is.True, error);
+
+            var id = entries![0].Id;
+
+            Assert.That(vehicle.TryUpdateSessionConfiguration(new JObject { ["contractCertificate"] = id }, out var said),
+                        Is.True, said);
+
+            using var client = new HttpClient {
+                                   BaseAddress  = new Uri($"http://127.0.0.1:{vehicle.HTTPPort}/"),
+                                   Timeout      = TimeSpan.FromSeconds(30)
+                               };
+
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                                                             "Basic",
+                                                             Convert.ToBase64String(Encoding.UTF8.GetBytes($"root:{vehicle.GeneratedPassword}"))
+                                                         );
+
+            var store    = JObject.Parse(await client.GetStringAsync("api/v1/certificates"));
+            var chosen   = store["chosen"]!;
+
+            using var asContract  = await client.DeleteAsync($"api/v1/certificates/{id}?kind=contract");
+            using var asVehicle   = await client.DeleteAsync($"api/v1/certificates/{id}?kind=vehicle");
+
+            Assert.Multiple(() => {
+
+                Assert.That(chosen["contractCertificate"]!["id"]!.  Value<String>(),  Is.EqualTo(id));
+                Assert.That(chosen["contractCertificate"]!["kind"]!.Value<String>(),  Is.EqualTo("contract"), "chosen as the kind its slot wants");
+                Assert.That(chosen["vehicleCertificate"]!.Type,                        Is.EqualTo(JTokenType.Null));
+
+                Assert.That(asContract.StatusCode,  Is.EqualTo(HttpStatusCode.Conflict), "what the session names");
+                Assert.That(asVehicle. StatusCode,  Is.EqualTo(HttpStatusCode.OK),       "not what the session names");
+
+                Assert.That(vehicle.Certificates.Get(id, CertificateKind.Vehicle),   Is.Null,     "gone as the vehicle certificate");
+                Assert.That(vehicle.Certificates.Get(id, CertificateKind.Contract),  Is.Not.Null, "kept as the contract certificate");
+
+            });
 
         }
 

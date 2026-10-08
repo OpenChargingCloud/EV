@@ -269,17 +269,24 @@ export interface ChosenCertificate {
     usable?:    boolean;
 }
 
+/** One certificate a session slot names, and the kind it names it as. */
+export interface ChosenAs {
+    id:    string;
+    kind:  CertificateKind;
+}
+
 /** The whole store, and which of it each session slot names. */
 export interface CertificateStore extends NodeCertificateStore<CertificateKind> {
     /**
-     * Which handle each session slot currently names. A certificate one of
-     * them names is not taken out of the store while it does.
+     * Which certificate each session slot currently names, as the kind the
+     * slot wants: a certificate kept as several kinds is chosen as one of
+     * them. It is not taken out of the store as that kind while it is.
      */
     chosen: {
-        vehicleCertificate:   string | null;
-        contractCertificate:  string | null;
-        oemCertificate:       string | null;
-        tariffCertificate:    string | null;
+        vehicleCertificate:   ChosenAs | null;
+        contractCertificate:  ChosenAs | null;
+        oemCertificate:       ChosenAs | null;
+        tariffCertificate:    ChosenAs | null;
     };
 }
 

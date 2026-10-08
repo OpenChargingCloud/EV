@@ -19,7 +19,7 @@ const { vehicleCertificates }  = await import('./certificates.ts');
 
 const vehicleA = {
     id:            'aaaaaaaaaaaaaaaa',
-    kind:          'vehicleCertificate',
+    kind:          'vehicle',
     label:         'Vehicle A',
     subject:       'CN=Vehicle A',
     thumbprint:    'aa'.repeat(32),
@@ -35,14 +35,15 @@ const vehicleA = {
 const store = {
     directory:           'certificates',
     trustAnchors:        [ 'v2gRoot' ],
-    credentials:         [ 'vehicleCertificate' ],
+    credentials:         [ 'vehicle', 'contract' ],
     recognised:          [],
     kinds:               { v2gRoot:             { description: 'V2G root',            usages: [] },
-                           vehicleCertificate:  { description: 'Vehicle certificate', usages: [] } },
+                           vehicle:             { description: 'Vehicle certificate',  usages: [] },
+                           contract:            { description: 'Contract certificate', usages: [] } },
     usages:              [],
-    certificates:        { v2gRoot: [], vehicleCertificate: [ vehicleA ] },
+    certificates:        { v2gRoot: [], vehicle: [ vehicleA ], contract: [ { ...vehicleA, kind: 'contract' } ] },
     keysAreUnencrypted:  true,
-    chosen:              { vehicleCertificate: vehicleA.id, contractCertificate: null }
+    chosen:              { vehicleCertificate: { id: vehicleA.id, kind: 'vehicle' }, contractCertificate: null }
 } as unknown as CertificateStore;
 
 const opened = () => open(certificatesPage(vehicleCertificates), '/configuration/certificates', [ 'certificates:read' ],
@@ -108,6 +109,17 @@ describe('what a vehicle says on the certificates page', () => {
 
         assert.ok(mark, 'Vehicle A is not marked as chosen');
         assert.equal(mark.getAttribute('title'), 'Who this vehicle is in a session - chosen on the Charging page, and not deleted while it is');
+
+    });
+
+    it('marks a certificate kept as two kinds as chosen in the row of the kind it is chosen as alone', async () => {
+
+        const root   = await opened();
+        const rows   = [ ...root.querySelectorAll('tr') ].filter(one => (one.textContent ?? '').includes('Vehicle A'));
+        const marked = rows.map(row => [ ...row.querySelectorAll('.chip') ].some(one => one.textContent!.trim() === 'chosen'));
+
+        assert.equal(rows.length, 2, 'Vehicle A is not shown as a vehicle and a contract certificate');
+        assert.deepEqual(marked, [ true, false ], 'chosen as the vehicle certificate, and not as the contract certificate');
 
     });
 
