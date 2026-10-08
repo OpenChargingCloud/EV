@@ -525,10 +525,10 @@ namespace cloud.charging.open.EV
 
                    new JProperty("certificates",             new JObject(
                        new JProperty("pkiDirectory",             SessionSettings.PKIDirectory),
-                       new JProperty("vehicleCertificate",       Chosen(SessionSettings.VehicleCertificate)),
-                       new JProperty("contractCertificate",      Chosen(SessionSettings.ContractCertificate)),
-                       new JProperty("oemCertificate",           Chosen(SessionSettings.OEMCertificate)),
-                       new JProperty("tariffCertificate",        Chosen(SessionSettings.TariffCertificate)),
+                       new JProperty("vehicleCertificate",       Chosen(SessionSettings.VehicleCertificate,   CertificateKind.Vehicle)),
+                       new JProperty("contractCertificate",      Chosen(SessionSettings.ContractCertificate,  CertificateKind.Contract)),
+                       new JProperty("oemCertificate",           Chosen(SessionSettings.OEMCertificate,       CertificateKind.OEMProvisioning)),
+                       new JProperty("tariffCertificate",        Chosen(SessionSettings.TariffCertificate,    CertificateKind.TariffVerification)),
                        // The roots are not chosen per session - every usable
                        // one of each kind is believed - so what is reported is
                        // how many there are to believe.
@@ -558,10 +558,11 @@ namespace cloud.charging.open.EV
 
         #endregion
 
-        #region (private) Chosen(Handle)
+        #region (private) Chosen(Handle, Kind)
 
         /// <summary>
-        /// What one of the session's certificate handles currently stands for.
+        /// What one of the session's certificate handles currently stands for,
+        /// as the kind its slot wants.
         /// </summary>
         /// <remarks>
         /// Null where nothing is chosen, and an object with the handle in it
@@ -570,15 +571,18 @@ namespace cloud.charging.open.EV
         /// missing case is reported rather than answered as "nothing chosen",
         /// because a certificate somebody deleted out from under a session
         /// setting is a different problem from a setting nobody ever made, and
-        /// only one of the two is fixed by choosing something.
+        /// only one of the two is fixed by choosing something. One kept as
+        /// another kind only is told as it is, and not usable: a session would
+        /// refuse it.
         /// </remarks>
-        private JObject? Chosen(String? Handle)
+        private JObject? Chosen(String?          Handle,
+                                CertificateKind  Kind)
         {
 
             if (Handle is null)
                 return null;
 
-            var entry = Certificates.Get(Handle);
+            var entry = Certificates.Get(Handle, Kind) ?? Certificates.Get(Handle);
 
             return entry is null
                        ? new JObject(
@@ -590,7 +594,7 @@ namespace cloud.charging.open.EV
                              new JProperty("label",    entry.Label),
                              new JProperty("subject",  entry.Subject),
                              new JProperty("notAfter", entry.NotAfter.UtcDateTime),
-                             new JProperty("usable",   entry.IsUsable),
+                             new JProperty("usable",   entry.Kind == Kind && entry.IsUsable),
                              new JProperty("missing",  false)
                          );
 
@@ -653,21 +657,20 @@ namespace cloud.charging.open.EV
                 if (handle is null)
                     continue;
 
+                // Asked for as the kind the slot wants: one certificate may be
+                // kept as several, and the first of them need not be this one.
+                if (Certificates.Get(handle, wanted) is not null)
+                    continue;
+
                 var entry = Certificates.Get(handle);
 
-                if (entry is null)
-                {
-                    Error = $"'{SessionConfiguration.SectionName}.{field}': there is no certificate '{handle}' " +
-                             "in this vehicle's store.";
-                    return false;
-                }
+                Error = entry is null
+                            ? $"'{SessionConfiguration.SectionName}.{field}': there is no certificate '{handle}' " +
+                               "in this vehicle's store."
+                            : $"'{SessionConfiguration.SectionName}.{field}': '{entry.Label}' is " +
+                              $"{entry.Kind.WithArticle()} and this names {wanted.WithArticle()}.";
 
-                if (entry.Kind != wanted)
-                {
-                    Error = $"'{SessionConfiguration.SectionName}.{field}': '{entry.Label}' is " +
-                            $"{entry.Kind.WithArticle()} and this names {wanted.WithArticle()}.";
-                    return false;
-                }
+                return false;
 
             }
 

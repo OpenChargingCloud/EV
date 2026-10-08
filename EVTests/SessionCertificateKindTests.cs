@@ -150,6 +150,109 @@ namespace cloud.charging.open.EV.Tests
 
         #endregion
 
+        #region (helper) Credential(Name)
+
+        /// <summary>
+        /// A self-signed certificate that is no CA, with its private key after
+        /// it, as PEM - valid from yesterday for a month.
+        /// </summary>
+        private static Byte[] Credential(String Name)
+        {
+
+            using var key         = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+            var request           = new CertificateRequest($"CN={Name}", key, HashAlgorithmName.SHA256);
+
+            request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
+
+            using var credential  = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1),
+                                                             DateTimeOffset.UtcNow.AddDays(30));
+
+            return System.Text.Encoding.ASCII.GetBytes(credential.ExportCertificatePem() + "\n" +
+                                                       key.ExportPkcs8PrivateKeyPem()     + "\n");
+
+        }
+
+        #endregion
+
+
+        #region ACertificateKeptAsSeveralKindsIsChosenAsTheKindItsSlotWants()
+
+        /// <summary>
+        /// One certificate kept as a vehicle and as a contract certificate,
+        /// chosen for the contract's slot. The store hands it out by its
+        /// handle alone as the first kind it is kept as, the vehicle
+        /// certificate: asked for that way, it was refused as "a vehicle
+        /// certificate and this names a contract certificate", and the session
+        /// configuration said it was not usable there.
+        /// </summary>
+        [Test]
+        public void ACertificateKeptAsSeveralKindsIsChosenAsTheKindItsSlotWants()
+        {
+
+            Assert.That(vehicle!.Certificates.Import(Credential("EV test credential"), null, "EV test credential",
+                                                     [ new CertificateRegistration(CertificateKind.Vehicle),
+                                                       new CertificateRegistration(CertificateKind.Contract) ],
+                                                     out var entries, out var error, out _),
+                        Is.True, error);
+
+            var id = entries![0].Id;
+
+            Assert.That(vehicle.Certificates.Get(id)!.Kind, Is.EqualTo(CertificateKind.Vehicle), "the first kind it is kept as");
+
+            Assert.That(vehicle.TryUpdateSessionConfiguration(new JObject { ["contractCertificate"] = id }, out var said),
+                        Is.True, said);
+
+            var chosen = vehicle.SessionConfigurationJSON()["certificates"]!["contractCertificate"]!;
+
+            Assert.That(chosen["id"]!.    Value<String>(),  Is.EqualTo(id));
+            Assert.That(chosen["usable"]!.Value<Boolean>(), Is.True, "usable as the contract certificate it is kept as");
+
+        }
+
+        #endregion
+
+        #region ACertificateKeptAsAnotherKindOnlyIsRefusedAndNotUsable()
+
+        /// <summary>
+        /// The same, chosen for the contract's slot and then taken out of the
+        /// store as a contract certificate, so that it is kept as a vehicle
+        /// certificate only: refused for that slot, saying what it is, and
+        /// the setting already made is told as not usable there.
+        /// </summary>
+        [Test]
+        public void ACertificateKeptAsAnotherKindOnlyIsRefusedAndNotUsable()
+        {
+
+            Assert.That(vehicle!.Certificates.Import(Credential("EV test credential"), null, "EV test credential",
+                                                     [ new CertificateRegistration(CertificateKind.Vehicle),
+                                                       new CertificateRegistration(CertificateKind.Contract) ],
+                                                     out var entries, out var error, out _),
+                        Is.True, error);
+
+            var id = entries![0].Id;
+
+            Assert.That(vehicle.TryUpdateSessionConfiguration(new JObject { ["contractCertificate"] = id }, out var said),
+                        Is.True, said);
+
+            Assert.That(vehicle.Certificates.Remove(id, CertificateKind.Contract, out var removeError),
+                        Is.True, removeError);
+
+            Assert.That(vehicle.TryUpdateSessionConfiguration(new JObject { ["contractCertificate"] = id }, out said),
+                        Is.False, "a certificate no longer kept as a contract certificate was taken");
+
+            Assert.That(said, Is.EqualTo("'session.contractCertificate': 'EV test credential' is a vehicle certificate " +
+                                         "and this names a contract certificate."));
+
+            var chosen = vehicle.SessionConfigurationJSON()["certificates"]!["contractCertificate"]!;
+
+            Assert.That(chosen["missing"]!.Value<Boolean>(), Is.False, "it is still in the store");
+            Assert.That(chosen["usable"]!. Value<Boolean>(), Is.False, "but not as a contract certificate");
+
+        }
+
+        #endregion
+
     }
 
 }

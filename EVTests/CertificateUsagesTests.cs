@@ -138,10 +138,11 @@ namespace cloud.charging.open.EV.Tests
 
         /// <summary>
         /// Of every kind of certificate there is, which a vehicle keeps, the
-        /// two that are told what they are for - a TLS root and a server
-        /// certificate, told the services a vehicle has - and none of the
+        /// two that are offered what they may be for - a TLS root and a server
+        /// certificate, offered the services a vehicle has - and none of the
         /// rest: not a vehicle's roots, and not an identity, since a vehicle
-        /// names no listener one could be shown on.
+        /// names no listener one could be shown on. Every kind may still be
+        /// marked with a usage somebody makes up.
         /// </summary>
         /// <remarks>
         /// What every node says of its store - that the answer is the store's
@@ -161,10 +162,10 @@ namespace cloud.charging.open.EV.Tests
                 Assert.That(store["kinds"]!["tlsRoot"]!["hasUsages"]!.Value<Boolean>(),       Is.True);
                 Assert.That(store["kinds"]!["tlsRoot"]!["usages"]!.Values<String>(),          Is.EqualTo(new[] { "dns", "nts" }), "what a page may offer a root");
                 Assert.That(store["kinds"]!["tlsServer"]!["usages"]!.Values<String>(),        Is.EqualTo(new[] { "dns", "nts" }));
-                Assert.That(store["kinds"]!["v2gRoot"]!["hasUsages"]!.Value<Boolean>(),       Is.False);
-                Assert.That(store["kinds"]!["tlsIdentity"]!["hasUsages"]!.Value<Boolean>(),   Is.False,
+                Assert.That(store["kinds"]!["v2gRoot"]!["hasUsages"]!.Value<Boolean>(),       Is.True,  "a usage of one's own may mark any kind");
+                Assert.That(store["kinds"]!["v2gRoot"]!["usages"]!.Children().Any(),          Is.False, "but a vehicle's root is offered none");
+                Assert.That(store["kinds"]!["tlsIdentity"]!["usages"]!.Children().Any(),      Is.False,
                             "a vehicle names no listener an identity could be told of, so a page offers it nothing - not the services a root vouches for");
-                Assert.That(store["kinds"]!["tlsIdentity"]!["usages"]!.Children().Any(),      Is.False);
 
                 Assert.That(store["trustAnchors"]!.Values<String>(),                          Does.Contain("tlsRoot").And.Contain("v2gRoot"));
                 Assert.That(store["recognised"]!.Values<String>(),                            Is.EqualTo(new[] { "tlsServer" }),

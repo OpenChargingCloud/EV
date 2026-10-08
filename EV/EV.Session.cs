@@ -613,15 +613,23 @@ namespace cloud.charging.open.EV
             if (Handle is null)
                 return null;
 
-            var entry = Certificates.Get(Handle)
-                            ?? throw new ArgumentException(
-                                   $"session.{Field}: there is no certificate '{Handle}' in this vehicle's store " +
-                                    "any more. Choose another one, or import it again.");
+            // Asked for as the kind it is wanted as: one certificate may be
+            // kept as several, and the first of them need not be this one.
+            var entry = Certificates.Get(Handle, Kind);
 
-            if (entry.Kind != Kind)
+            if (entry is null)
+            {
+
+                var other = Certificates.Get(Handle)
+                                ?? throw new ArgumentException(
+                                       $"session.{Field}: there is no certificate '{Handle}' in this vehicle's store " +
+                                        "any more. Choose another one, or import it again.");
+
                 throw new ArgumentException(
-                          $"session.{Field}: '{entry.Label}' is {entry.Kind.WithArticle()} and this names " +
+                          $"session.{Field}: '{other.Label}' is {other.Kind.WithArticle()} and this names " +
                           $"{Kind.WithArticle()}.");
+
+            }
 
             if (!entry.IsActive)
                 throw new ArgumentException(
