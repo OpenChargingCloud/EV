@@ -13,7 +13,7 @@ import { describe, it }      from 'node:test';
 
 import type { Certificate, CertificateStore } from './api/client.ts';
 
-const { certificatesPage }     = await import('@node/pages/certificates.ts');
+const { certificatesPage, identitiesPage } = await import('@node/pages/certificates.ts');
 const { vehicleCertificates }  = await import('./certificates.ts');
 
 
@@ -37,20 +37,26 @@ const store = {
     trustAnchors:        [ 'v2gRoot' ],
     credentials:         [ 'vehicle', 'contract' ],
     recognised:          [],
-    kinds:               { v2gRoot:             { description: 'V2G root',            usages: [] },
-                           vehicle:             { description: 'Vehicle certificate',  usages: [] },
-                           contract:            { description: 'Contract certificate', usages: [] } },
+    kinds:               { v2gRoot:   { description: 'V2G root',             page: 'certificates', trustAnchor: true,  needsPrivateKey: false, usages: [] },
+                           vehicle:   { description: 'Vehicle certificate',  page: 'identities',   trustAnchor: false, needsPrivateKey: true,  usages: [] },
+                           contract:  { description: 'Contract certificate', page: 'identities',   trustAnchor: false, needsPrivateKey: true,  usages: [] } },
     usages:              [],
     certificates:        { v2gRoot: [], vehicle: [ vehicleA ], contract: [ { ...vehicleA, kind: 'contract' } ] },
     keysAreUnencrypted:  true,
     chosen:              { vehicleCertificate: { id: vehicleA.id, kind: 'vehicle' }, contractCertificate: null }
 } as unknown as CertificateStore;
 
+/** The certificates alone: the roots a vehicle believes. */
 const opened = () => open(certificatesPage(vehicleCertificates), '/configuration/certificates', [ 'certificates:read' ],
                           ({ path }) => path === '/certificates' ? store : undefined,
                           root => [ ...root.querySelectorAll('h2') ].some(one => /believes/.test(one.textContent ?? '')));
 
-/** The hint right below a group's heading: "What this electric vehicle believes", say. */
+/** Who the vehicle is, with the keys: its credentials, a session's among them. */
+const identities = () => open(identitiesPage(vehicleCertificates), '/configuration/identities', [ 'certificates:read' ],
+                              ({ path }) => path === '/certificates' ? store : undefined,
+                              root => [ ...root.querySelectorAll('h2') ].some(one => /Who this/.test(one.textContent ?? '')));
+
+/** The hint right below a group's heading: "What this electric vehicle believes", say, or "Who this electric vehicle is". */
 function hintBelow(root: HTMLElement, heading: RegExp): string {
     const found = [ ...root.querySelectorAll('h2') ].find(one => heading.test(one.textContent ?? ''));
     assert.ok(found, `there is no heading ${heading}`);
@@ -77,12 +83,25 @@ describe('what a vehicle says on the certificates page', () => {
 
     });
 
+    it('shows its credentials on Identities, and not among the certificates', async () => {
+
+        const certificates = await opened();
+
+        assert.ok(![ ...certificates.querySelectorAll('h2') ].some(one => /Who this/.test(one.textContent ?? '')), 'who it is is on the certificates page');
+        assert.ok(!(certificates.textContent ?? '').includes('Vehicle A'), 'a credential is among the certificates');
+
+        const credentials = await identities();
+
+        assert.ok((credentials.textContent ?? '').includes('Vehicle A'), 'the credential is not among the identities');
+
+    });
+
     it('says under what it presents that a session\'s certificates are chosen on the Charging Session page, and links to it', async () => {
 
-        const root = await opened();
+        const root = await identities();
         const link = [ ...root.querySelectorAll<HTMLAnchorElement>('a') ].find(one => one.textContent === 'Charging Session');
 
-        assert.match(hintBelow(root, /presents/), /Which of these one session uses is chosen on the Charging Session page;/);
+        assert.match(hintBelow(root, /Who this/), /Which of these one session uses is chosen on the Charging Session page;/);
         assert.ok(link, 'there is no link to the Charging Session page');
         assert.equal(link.getAttribute('href'), '/configuration/session');
 
@@ -90,7 +109,7 @@ describe('what a vehicle says on the certificates page', () => {
 
     it('says what an unencrypted key lets somebody take: the vehicle\'s identity and its contract', async () => {
 
-        const root   = await opened();
+        const root   = await identities();
         const notice = [ ...root.querySelectorAll('.notice') ].find(one => /not encrypted/.test(one.textContent ?? ''));
 
         assert.ok(notice, 'there is no notice of the unencrypted keys');
@@ -100,7 +119,7 @@ describe('what a vehicle says on the certificates page', () => {
 
     it('marks the certificate a session takes as chosen, in the vehicle\'s words', async () => {
 
-        const root = await opened();
+        const root = await identities();
         const row  = [ ...root.querySelectorAll('tr') ].find(one => (one.textContent ?? '').includes('Vehicle A'));
 
         assert.ok(row, 'there is no row of Vehicle A');
@@ -114,7 +133,7 @@ describe('what a vehicle says on the certificates page', () => {
 
     it('marks a certificate kept as two kinds as chosen in the row of the kind it is chosen as alone', async () => {
 
-        const root   = await opened();
+        const root   = await identities();
         const rows   = [ ...root.querySelectorAll('tr') ].filter(one => (one.textContent ?? '').includes('Vehicle A'));
         const marked = rows.map(row => [ ...row.querySelectorAll('.chip') ].some(one => one.textContent!.trim() === 'chosen'));
 

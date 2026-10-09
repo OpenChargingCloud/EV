@@ -116,8 +116,8 @@ export const sessionPage: Page = {
                 </label>
                 ${available.length === 0 && !missing ? html`
                     <p class="hint">
-                        None of this kind is in the
-                        <a href="${toURL('/configuration/certificates')}">certificate store</a> yet.
+                        None of this kind is among this vehicle's
+                        <a href="${toURL('/configuration/identities')}">identities</a> yet.
                     </p>` : nothing}
             `;
 
@@ -411,14 +411,14 @@ export const sessionPage: Page = {
                             </div>
 
                             <span class="hint">
-                                Saved to ${configuration.file}. These name certificates in this vehicle's
-                                <a href="${toURL('/configuration/certificates')}">certificate store</a>; put one there first
+                                Saved to ${configuration.file}. These name this vehicle's
+                                <a href="${toURL('/configuration/identities')}">identities</a>; put one there first
                                 and it appears here. They are not interchangeable, and mixing them up produces
                                 failures that read like protocol bugs: the Vehicle one says who this vehicle is,
                                 the contract one says who pays, the OEM one is what it was born with and all it
                                 can prove before it holds a contract. Which roots are believed is not chosen
-                                per session - every switched-on root of a kind is - so that is managed in the
-                                store as well.
+                                per session - every switched-on root of a kind is - so that is managed on the
+                                <a href="${toURL('/configuration/certificates')}">Certificates</a> page.
                             </span>
 
                         </form>

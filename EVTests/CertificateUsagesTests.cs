@@ -178,6 +178,38 @@ namespace cloud.charging.open.EV.Tests
 
         #endregion
 
+        #region AVehiclesCredentialsAreItsIdentitiesAndItKeepsNoServerIdentity()
+
+        /// <summary>
+        /// The pages a vehicle's kinds are looked after on: its roots, the
+        /// server certificates and the tariff certificate on Certificates, the
+        /// credentials a session presents on Identities - and no TLS server
+        /// identity at all, since a vehicle serves no TLS.
+        /// </summary>
+        [Test]
+        public async Task AVehiclesCredentialsAreItsIdentitiesAndItKeepsNoServerIdentity()
+        {
+
+            var (_, store) = await Send(HttpMethod.Get, "api/v1/certificates");
+
+            var pageOf = (String kind) => store["kinds"]![kind]?.Value<String>("page");
+
+            Assert.Multiple(() => {
+
+                foreach (var kind in new[] { "v2gRoot", "moRoot", "oemRoot", "tlsRoot", "tlsServer", "tariffVerification" })
+                    Assert.That(pageOf(kind), Is.EqualTo("certificates"), kind);
+
+                foreach (var kind in new[] { "vehicle", "contract", "oemProvisioning", "tlsIdentity" })
+                    Assert.That(pageOf(kind), Is.EqualTo("identities"), kind);
+
+                Assert.That(store["kinds"]!["tlsServerIdentity"], Is.Null, "a vehicle serves no TLS");
+
+            });
+
+        }
+
+        #endregion
+
     }
 
 }

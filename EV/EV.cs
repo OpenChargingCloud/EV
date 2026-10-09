@@ -247,6 +247,9 @@ namespace cloud.charging.open.EV
                    NTSClient:          NTSClient,
                    Frontend:           Frontend ?? new EmbeddedContentSource(HTTPRoot, typeof(EV).Assembly),
                    CertificatesPath:   CertificatesPath,
+                   // Every kind but who a server of it is: a vehicle serves no
+                   // TLS, and a kind it kept would be a page nothing uses.
+                   CertificateKinds:   CertificateKindExtensions.All.Where(kind => kind != CertificateKind.TLSServerIdentity),
                    Log:                Log,
                    LogToConsole:       LogToConsole,
                    ConsoleLogLevel:    ConsoleLogLevel,

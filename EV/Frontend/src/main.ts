@@ -37,6 +37,7 @@ startNode({
             { path: '/configuration/vehicle',  label: 'Vehicle',    icon: 'fa-car-side',         permission: [ 'vehicle:read' ] },
             { path: '/configuration/v2g',      label: 'ISO 15118',  icon: 'fa-tower-broadcast',  permission: [ 'v2g:read' ]     },
             nodeMenu.certificates,
+            nodeMenu.identities,
             { path: '/configuration/session',  label: 'Charging Session',  icon: 'fa-bolt',  permission: [ 'session:read' ] }
         ]),
         nodeMenu.logs

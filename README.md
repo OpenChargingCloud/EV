@@ -53,16 +53,16 @@ deployment needs nothing but the DLL.
 
 Not everything in that bundle is the vehicle's. What the web interface of every
 kind of node shares - the frame with its menu, the sign-in, the Logs, DNS
-client, NTS client and Certificates pages and the stylesheet, and below them
-building HTML safely, the router, where the pages are mounted, asking before a
-page's changes are left behind, how the node is asked and what every node
-answers, the log the pages follow, and who is signed in - is WWCP_Node's, in
-its `Frontend/src`, and bundled in as `@node/...`. What is the vehicle's is
-what it adds: `main.ts` names its menu and its pages, `certificates.ts` its own
-words on the Certificates page, `api/client.ts` its routes, and
-`styles/app.scss` its colour. So a new WWCP_Node can change the vehicle's pages
-without a line changed here, which is why the build counts those files among
-its inputs.
+client, NTS client, Certificates and Identities pages and the stylesheet, and
+below them building HTML safely, the router, where the pages are mounted,
+asking before a page's changes are left behind, how the node is asked and what
+every node answers, the log the pages follow, and who is signed in - is
+WWCP_Node's, in its `Frontend/src`, and bundled in as `@node/...`. What is the
+vehicle's is what it adds: `main.ts` names its menu and its pages,
+`certificates.ts` its own words on the Certificates and Identities pages,
+`api/client.ts` its routes, and `styles/app.scss` its colour. So a new
+WWCP_Node can change the vehicle's pages without a line changed here, which is
+why the build counts those files among its inputs.
 
 The vehicle's own pages are held to what every page of every kind of node is:
 `src/pages/pages.test.ts` puts them under the rules of WWCP_Node's
@@ -107,10 +107,12 @@ included, with `chromeTakesTheFocus` of WWCP_Node's `test/dom.ts`. The stand-in
 is the one every kind of node's page tests share, WWCP_Node's `test/node.ts`;
 all that `test/vehicle.ts` adds is that it is the Electric Vehicle, and its
 user a driver. And `src/certificates.test.ts` draws every node's Certificates
-page with the vehicle's words, templates of `view.ts` as the page's own: that
-none of its roots is chosen for a session, that a session's certificates are
-chosen on the Charging Session page, linked to, what an unencrypted key lets somebody
-take, and the certificate a session takes marked as chosen.
+and Identities pages with the vehicle's words, templates of `view.ts` as the
+pages' own: that none of its roots is chosen for a session, that its
+credentials are on Identities and not among the certificates, that a session's
+certificates are chosen on the Charging Session page, linked to, what an
+unencrypted key lets somebody take, and the certificate a session takes marked
+as chosen.
 
 `dotnet build -p:SkipFrontendBuild=true` leaves the npm step out and reuses
 whatever is already in `dist/` - or, where nothing is, builds a vehicle with no
@@ -260,9 +262,16 @@ vehicle connects to shows, kept so that the server can be held to it by its
 fingerprint, and never with a private key, which would be that server's key in
 the wrong place. The Certificates page shows these as a third group, what the
 vehicle *recognises*. The store keeps the node's two other TLS kinds as well,
-`clientRoot` and `tlsIdentity`, which nothing in the vehicle uses yet. An
-identity is told the listeners it is shown on where a kind of node names some;
-a vehicle names none, so the page offers an identity nothing to be told.
+`clientRoot` and `tlsIdentity` - who the vehicle is to a server that asks -
+which nothing in the vehicle uses yet.
+
+They are looked after on two pages. **Certificates** has what is kept without
+a private key: the roots, the server certificates and the tariff certificate.
+**Identities** has who the vehicle is, each with its private key: the Vehicle,
+contract and OEM provisioning certificates and a TLS identity - and there a
+session's credentials are marked chosen. A vehicle keeps no TLS server
+identity, the third page every node may have: it serves no TLS, and a kind it
+kept would be a page nothing uses.
 
 A TLS root and a server certificate are told what they are for: the time
 servers (`nts`), the name servers (`dns`), or - with nothing said - every use.
