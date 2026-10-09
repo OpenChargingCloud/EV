@@ -3,7 +3,7 @@
  * kind says: that none of its roots is chosen for a session, and that a chain
  * of ISO 15118's is not checked at all where there is no root of its kind - a
  * server's still is, against the roots this machine trusts. And what it
- * presents is chosen for a session, on the Charging page.
+ * presents is chosen for a session, on the Charging Session page.
  *
  * Templates of view.ts, as the page draws them: a draw changes only what
  * differs, the hints with the rest. main.ts hands them to startNode().
@@ -15,11 +15,11 @@ import { html } from '@node/view';
 
 /**
  * What one of a session's four certificates is, on the row of the one the
- * Charging page names - which the vehicle will not let go of while it does.
+ * Charging Session page names - which the vehicle will not let go of while it does.
  */
 const chosenFor = (What: string) => ({
     label:  'chosen',
-    title:  `${What} - chosen on the Charging page, and not deleted while it is`
+    title:  `${What} - chosen on the Charging Session page, and not deleted while it is`
 });
 
 export const vehicleCertificates: CertificatesOptions = {
@@ -36,7 +36,7 @@ export const vehicleCertificates: CertificatesOptions = {
 
         presents:     html`
             Which of these one session uses is chosen on the
-            <a href="${toURL('/configuration/session')}">Charging</a> page; this is where they are put
+            <a href="${toURL('/configuration/session')}">Charging Session</a> page; this is where they are put
             on the vehicle and taken off it. A certificate marked <em>chosen</em> is the one that page
             names.
         `,

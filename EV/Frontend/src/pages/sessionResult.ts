@@ -3,8 +3,8 @@ import { formatValue } from '@node/ui';
 import { html, nothing, type TemplateResult } from '@node/view';
 
 /**
- * What came of one session, as the Charging page and the Stations page show
- * it: the outcome, the station, the pack, the stages before it.
+ * What came of one session, as the Charging page and the Charging Session
+ * Settings page show it: the outcome, the station, the pack, the stages before it.
  */
 export function sessionResult(run: SessionRun): TemplateResult {
 

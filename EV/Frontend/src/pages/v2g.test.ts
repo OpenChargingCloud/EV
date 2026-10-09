@@ -3,7 +3,7 @@
  * vehicle: the interface saved says what the vehicle took, the interfaces
  * offered keep their option by name, and a pairing says which station is at
  * the end of the cable. Looking for a station, and what a discovery asks for,
- * are the Stations page's - see stations.test.ts.
+ * are the Charging page's - see charging.test.ts.
  */
 
 import { asked, field, open, submit, until, type Asked } from '../../test/vehicle.ts';
@@ -106,7 +106,7 @@ describe('the ISO 15118 page', () => {
                     'the pairing was not drawn');
 
         assert.match(root.textContent!.replace(/\s+/g, ' '), /The station at the cable\s*02:00:00:00:00:AA 12\.5 dB/);
-        assert.equal(root.querySelector('#discover'), null, 'looking for a station is the Stations page\'s');
+        assert.equal(root.querySelector('#discover'), null, 'looking for a station is the Charging page\'s');
 
     });
 

@@ -12,7 +12,7 @@ import { html, nothing, render, repeat, type TemplateResult } from '@node/view';
  * The wire below the charging cable, from this vehicle's side: which
  * interface it speaks ISO 15118 on, and a SLAC pairing on its own.
  *
- * Looking for a station, and what a discovery asks for, are on the Stations
+ * Looking for a station, and what a discovery asks for, are on the Charging
  * page - "/" - where a station found is charged at.
  *
  * Nothing on this page starts a charging session. A pairing asks a question;
@@ -84,7 +84,7 @@ export const v2gPage: Page = {
                             heard, and the quietest link is the cable that is plugged in.
                             Real SLAC is EtherType 0x88E1 over AF_PACKET and needs Linux and CAP_NET_RAW;
                             this runs the same state machine over a simulated medium, against the peer set
-                            on the <a href="${toURL('/configuration/session')}">Charging</a> page. A session pairs by
+                            on the <a href="${toURL('/configuration/session')}">Charging Session</a> page. A session pairs by
                             itself where one is configured - this button is here because SLAC agreeing and
                             SDP finding nothing is a very different link from SLAC never agreeing at all.
                         </p>
@@ -122,7 +122,7 @@ export const v2gPage: Page = {
                                 On a real vehicle this is the powerline modem. On a bench it is whichever
                                 interface the station is reachable over. An interface only appears here when
                                 it is up, has a MAC address and has an IPv6 link-local address - SDP needs
-                                all three. A station is looked for on the <a href="${toURL('/')}">Stations</a> page.
+                                all three. A station is looked for on the <a href="${toURL('/')}">Charging</a> page.
                             </span>
 
                         </form>

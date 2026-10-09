@@ -22,7 +22,7 @@ import { sessionResult } from './sessionResult';
  */
 const andABitMore = 5;
 
-/** How often this page asks whether a session it started is over - as the Charging page does. */
+/** How often this page asks whether a session it started is over - as the Charging Session Settings page does. */
 const askAgainAfter = 2_000;
 
 /** How a session at a station is secured, as the TLS choice beside it says it. */
@@ -30,7 +30,7 @@ type TLSChoice = 'none' | 'dotnet' | 'bc';
 
 
 /**
- * Stations: plug in, look for a station, and charge at it.
+ * Charging: plug in, find the station, and charge.
  *
  * Plugging in is how the vehicle gets onto the link: straight onto it, after a
  * SLAC pairing that finds the station at the end of the cable, or onto the
@@ -52,9 +52,9 @@ type TLSChoice = 'none' | 'dotnet' | 'bc';
  * and its focus - outlives a discovery, a pairing or a running session being
  * drawn.
  */
-export const stationsPage: Page = {
+export const chargingPage: Page = {
 
-    title: 'Stations',
+    title: 'Charging',
 
     render(context) {
 
@@ -67,8 +67,8 @@ export const stationsPage: Page = {
 
         const content = shell(root, {
             active:    '/',
-            title:     'Stations',
-            subtitle:  'Plug in, look for a station, and charge at it.',
+            title:     'Charging',
+            subtitle:  'Plug in, find the station, and charge.',
             actions:   reloadButton(() => reload())
         });
 
@@ -203,7 +203,7 @@ export const stationsPage: Page = {
                             repeated up to ${settings.maxRetries} times until something answers or
                             ${settings.totalDeadlineSeconds} s have gone by; every request and every answer goes into the
                             <a href="${toURL('/logs')}">log</a> while it happens. What is entered here is for this
-                            plugging in only - the settings are on the <a href="${toURL('/configuration/session')}">Charging</a> page.
+                            plugging in only - the settings are on the <a href="${toURL('/configuration/session')}">Charging Session</a> page.
                         </p>
 
                         ${link ? linkView(link) : nothing}

@@ -1,5 +1,5 @@
 /**
- * The Stations page - "/" - drawn, in a document of happy-dom, against a
+ * The Charging page - "/" - drawn, in a document of happy-dom, against a
  * stand-in vehicle: it plugs in as chosen before it looks, and not again where
  * it is plugged in that way; it offers every station found, each secured as
  * the station offers, and charges at the one chosen; a plugging in refused
@@ -16,7 +16,7 @@ import { describe, it }      from 'node:test';
 import type { DiscoveryResult, Link, LinkRequest, SessionConfiguration, SessionStart,
               V2GConfiguration, V2GUpdate } from '../api/client.ts';
 
-const { stationsPage } = await import('./stations.ts');
+const { chargingPage } = await import('./charging.ts');
 
 
 let held: V2GConfiguration;
@@ -131,7 +131,7 @@ async function opened(link: Link | null = null): Promise<HTMLElement> {
     } as unknown as SessionConfiguration;
     refuseSettings = false;
     plugging       = 'pluggedIn';
-    return open(stationsPage, '/', [ 'v2g:read', 'v2g:edit', 'v2g:run', 'session:read', 'session:run' ],
+    return open(chargingPage, '/', [ 'v2g:read', 'v2g:edit', 'v2g:run', 'session:read', 'session:run' ],
                 vehicle, root => root.querySelector('#settings-form') !== null);
 }
 
@@ -139,7 +139,7 @@ const looked = (root: HTMLElement) => root.querySelector('#discovery') !== null 
                                       !root.querySelector<HTMLButtonElement>('#look')!.disabled;
 
 
-describe('the Stations page', () => {
+describe('the Charging page', () => {
 
     it('plugs in over SLAC before it looks, and shows the station at the end of the cable', async () => {
 

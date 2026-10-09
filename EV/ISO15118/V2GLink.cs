@@ -731,21 +731,13 @@ namespace cloud.charging.open.EV.ISO15118
                                                 bootstrapPeers: [ Peer ]
                                             );
 
-                // The session itself rather than SlacEvStage around it: the
-                // stage hands back the network it agreed on and nothing of
-                // who it agreed with, and which station answered loudest is
-                // what somebody plugging in wants to see. There is no chip to
-                // program on a simulated medium, which is all the stage adds.
-                await using var session = new EvSlacSession(transport, new EvSlacOptions { PevId = new Byte[17] });
-
-                await transport.StartAsync(CancellationToken);
-
-                var result = await session.RunAsync(CancellationToken);
+                var result = await new SlacEvStage(transport, new EvSlacOptions { PevId = new Byte[17] }).
+                                       PairAsync(CancellationToken);
 
                 watch.Stop();
 
-                Log.Notice($"SLAC: paired in {watch.Elapsed.TotalMilliseconds:F0} ms with {result.Winner.EVSEMACAddress} - " +
-                           $"network {Convert.ToHexString(result.MatchCnf.Nid)}.",
+                Log.Notice($"SLAC: paired in {watch.Elapsed.TotalMilliseconds:F0} ms with {result.Peer} - " +
+                           $"network {Convert.ToHexString(result.Nid)}.",
                            "15118", "slac");
 
                 return new JObject(
@@ -757,12 +749,12 @@ namespace cloud.charging.open.EV.ISO15118
                            // network membership key beside it: the NID is what
                            // says which pairing this was, and the NMK is the
                            // secret that pairing agreed on.
-                           new JProperty("nid",         Convert.ToHexString(result.MatchCnf.Nid)),
+                           new JProperty("nid",         Convert.ToHexString(result.Nid)),
                            // The station at the end of the cable - the one
                            // that heard this vehicle loudest, at the lowest
                            // attenuation - and every one that answered.
-                           new JProperty("station",     Candidate(result.Winner)),
-                           new JProperty("candidates",  new JArray(result.AllCandidates.Select(Candidate)))
+                           new JProperty("station",     result.Station is null ? null : Candidate(result.Station)),
+                           new JProperty("candidates",  new JArray(result.Candidates.Select(Candidate)))
                        );
 
             }

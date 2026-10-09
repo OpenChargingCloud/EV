@@ -43,13 +43,13 @@ const askAgainAfter = 2_000;
  */
 export const sessionPage: Page = {
 
-    title: 'Charging session',
+    title: 'Charging Session Settings',
 
     render({ root }) {
 
         const content = shell(root, {
             active:    '/configuration/session',
-            title:     'Charging session',
+            title:     'Charging Session Settings',
             subtitle:  'What this vehicle does once it has found a station.',
             actions:   reloadButton(() => reload())
         });

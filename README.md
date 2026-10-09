@@ -109,7 +109,7 @@ all that `test/vehicle.ts` adds is that it is the Electric Vehicle, and its
 user a driver. And `src/certificates.test.ts` draws every node's Certificates
 page with the vehicle's words, templates of `view.ts` as the page's own: that
 none of its roots is chosen for a session, that a session's certificates are
-chosen on the Charging page, linked to, what an unencrypted key lets somebody
+chosen on the Charging Session page, linked to, what an unencrypted key lets somebody
 take, and the certificate a session takes marked as chosen.
 
 `dotnet build -p:SkipFrontendBuild=true` leaves the npm step out and reuses
@@ -152,7 +152,7 @@ states somebody can be in on purpose, and neither is a fault.
 
 ## Plugged in, and staying plugged in
 
-The Stations page - the web interface's `/`, first in its menu - is where a
+The Charging page - the web interface's `/`, first in its menu - is where a
 station is looked for and charged at, and it starts with how the vehicle is
 plugged in: directly, with nothing before SDP; over SLAC, whose sounding finds
 the station at the end of the cable, the one that heard the vehicle loudest;

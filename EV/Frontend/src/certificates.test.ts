@@ -1,7 +1,7 @@
 /**
  * Every node's certificates page drawn with what a vehicle says on it, in a
  * document of happy-dom, against a stand-in vehicle: its words under what it
- * believes and what it presents, the Charging page they point to, what an
+ * believes and what it presents, the Charging Session page they point to, what an
  * unencrypted key lets somebody take, and a certificate a session takes
  * marked as chosen - each a template of view.ts, as the page draws them.
  */
@@ -77,13 +77,13 @@ describe('what a vehicle says on the certificates page', () => {
 
     });
 
-    it('says under what it presents that a session\'s certificates are chosen on the Charging page, and links to it', async () => {
+    it('says under what it presents that a session\'s certificates are chosen on the Charging Session page, and links to it', async () => {
 
         const root = await opened();
-        const link = [ ...root.querySelectorAll<HTMLAnchorElement>('a') ].find(one => one.textContent === 'Charging');
+        const link = [ ...root.querySelectorAll<HTMLAnchorElement>('a') ].find(one => one.textContent === 'Charging Session');
 
-        assert.match(hintBelow(root, /presents/), /Which of these one session uses is chosen on the Charging page;/);
-        assert.ok(link, 'there is no link to the Charging page');
+        assert.match(hintBelow(root, /presents/), /Which of these one session uses is chosen on the Charging Session page;/);
+        assert.ok(link, 'there is no link to the Charging Session page');
         assert.equal(link.getAttribute('href'), '/configuration/session');
 
     });
@@ -108,7 +108,7 @@ describe('what a vehicle says on the certificates page', () => {
         const mark = [ ...row.querySelectorAll<HTMLElement>('.chip[title]') ].find(one => one.textContent!.trim() === 'chosen');
 
         assert.ok(mark, 'Vehicle A is not marked as chosen');
-        assert.equal(mark.getAttribute('title'), 'Who this vehicle is in a session - chosen on the Charging page, and not deleted while it is');
+        assert.equal(mark.getAttribute('title'), 'Who this vehicle is in a session - chosen on the Charging Session page, and not deleted while it is');
 
     });
 

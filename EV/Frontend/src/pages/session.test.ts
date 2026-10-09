@@ -1,5 +1,5 @@
 /**
- * The Charging page drawn, in a document of happy-dom, against a stand-in
+ * The Charging Session Settings page drawn, in a document of happy-dom, against a stand-in
  * vehicle: what is typed into one of its forms - and its focus - outlives
  * another being saved and the page being drawn while a session runs, a form
  * saved says what the vehicle took, one refused keeps what is typed and says
@@ -100,7 +100,7 @@ async function opened(): Promise<HTMLElement> {
 }
 
 
-describe('the Charging page', () => {
+describe('the Charging Session Settings page', () => {
 
     it('keeps what is typed into the goals, and its focus, while where to is saved', async () => {
 
