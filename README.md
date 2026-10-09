@@ -222,7 +222,11 @@ do is an operation - `read`, `edit` or `run` - on a resource: the node's
 administrators may edit, which includes choosing the ones a session uses:
 somebody who can add a root can make this vehicle believe a station nobody
 else would. So is the SSH server, which the driver may not even read: its page
-shows every account's keys and who is signed in over SSH right now. The
+shows every account's keys and who is signed in over SSH right now. Their own
+keys the driver looks after all the same, as everybody signed in does: the
+name at the foot of the menu opens the account's own page (`/account`) - its
+details, its API keys and its SSH keys, made, switched off and on, and
+removed - which needs no role, and shows nobody's account but their own. The
 configuration file may add roles and say differently what
 one of them may do - see
 [WWCP_Node's README](https://github.com/OpenChargingCloud/WWCP_Node#who-may-sign-in).
