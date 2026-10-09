@@ -226,7 +226,7 @@ namespace cloud.charging.open.EV.Tests
 
             Assert.Multiple(() => {
                 Assert.That(ev.Roles,             Is.EqualTo(new[] { "viewer", "driver", "service", WWCPNode.AdminRole }));
-                Assert.That(ev.Access.Resources,  Is.EqualTo(new[] { "configuration", "dns", "nts", "certificates", "vehicle", "v2g", "session" }));
+                Assert.That(ev.Access.Resources,  Is.EqualTo(new[] { "configuration", "dns", "nts", "certificates", "ssh", "vehicle", "v2g", "session" }));
             });
 
         }
@@ -239,9 +239,11 @@ namespace cloud.charging.open.EV.Tests
         /// What each role could do before roles were data, permission by
         /// permission: the driver charges and asks, the service also repoints,
         /// the viewer looks, and only the administrators touch the
-        /// certificates.
+        /// certificates. The SSH server is read by the viewer and the service
+        /// and not by the driver, and changed by the administrators alone.
         /// </summary>
         [TestCase("viewer",       "dns:read",           true)]
+        [TestCase("viewer",       "ssh:read",           true)]
         [TestCase("viewer",       "session:read",       true)]
         [TestCase("viewer",       "dns:edit",           false)]
         [TestCase("viewer",       "dns:run",            false)]
@@ -258,15 +260,23 @@ namespace cloud.charging.open.EV.Tests
         [TestCase("driver",       "nts:edit",           false)]
         [TestCase("driver",       "v2g:edit",           false)]
         [TestCase("driver",       "certificates:edit",  false)]
+        [TestCase("driver",       "configuration:read", true)]
+        [TestCase("driver",       "vehicle:read",       true)]
+        [TestCase("driver",       "v2g:read",           true)]
+        [TestCase("driver",       "session:read",       true)]
+        [TestCase("driver",       "ssh:read",           false)]
 
         [TestCase("service",      "dns:edit",           true)]
         [TestCase("service",      "nts:edit",           true)]
         [TestCase("service",      "v2g:edit",           true)]
         [TestCase("service",      "session:run",        true)]
         [TestCase("service",      "certificates:edit",  false)]
+        [TestCase("service",      "ssh:read",           true)]
+        [TestCase("service",      "ssh:edit",           false)]
 
         [TestCase("systemadmin",  "certificates:edit",  true)]
         [TestCase("systemadmin",  "session:run",        true)]
+        [TestCase("systemadmin",  "ssh:edit",           true)]
         public void EachRoleMayDoWhatItAlwaysMayDo(String Role, String Permission, Boolean Allowed)
         {
 
@@ -310,6 +320,35 @@ namespace cloud.charging.open.EV.Tests
                 Assert.That(permissions.Any(permission => permission.StartsWith('*')),
                             Is.False,
                             "spelt out resource by resource, so that a page asking \"dns:read\" need not know what \"*\" is");
+            });
+
+        }
+
+        #endregion
+
+        #region TheSSHServerPageIsTheServicesToReadAndNotTheDrivers()
+
+        /// <summary>
+        /// Over the wire: a driver is refused the SSH server's page - every
+        /// account's keys, who is signed in over SSH - and the service is not.
+        /// </summary>
+        [Test]
+        public async Task TheSSHServerPageIsTheServicesToReadAndNotTheDrivers()
+        {
+
+            await TestPorts.StartedOnFreshPorts(() => Vehicle());
+
+            using var driver   = await SignedInAs("driver1",  "driver");
+            using var service  = await SignedInAs("service1", "service");
+
+            var byDriver       = await driver. GetAsync("api/v1/configuration/ssh");
+            var byService      = await service.GetAsync("api/v1/configuration/ssh");
+            var driverMay      = JObject.Parse(await (await driver.GetAsync("api/v1/auth/me")).Content.ReadAsStringAsync())["permissions"]!.Values<String>().ToArray();
+
+            Assert.Multiple(() => {
+                Assert.That(byDriver. StatusCode,  Is.EqualTo(HttpStatusCode.Forbidden));
+                Assert.That(byService.StatusCode,  Is.EqualTo(HttpStatusCode.OK));
+                Assert.That(driverMay,             Does.Not.Contain("ssh:read"), "the menu offers the driver no SSH page");
             });
 
         }

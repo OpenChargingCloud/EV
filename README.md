@@ -207,21 +207,23 @@ says it has started, and the session resource carries the result when it ends.
 
 Four roles, when the configuration file says nothing else, and what each may
 do is an operation - `read`, `edit` or `run` - on a resource: the node's
-`configuration`, `dns`, `nts` and `certificates`, and the vehicle's
+`configuration`, `dns`, `nts`, `certificates` and `ssh`, and the vehicle's
 `vehicle`, `v2g` and `session`.
 
 | Role | may |
 |---|---|
 | `viewer` | read everything |
-| `driver` | read everything; ask a name server, a time server or the link something; change what the battery wants and what a session asks for; charge |
-| `service` | everything the driver may, and change where the vehicle resolves names, reads the time and finds a station |
+| `driver` | read everything but the SSH server; ask a name server, a time server or the link something; change what the battery wants and what a session asks for; charge |
+| `service` | everything the driver may, read the SSH server, and change where the vehicle resolves names, reads the time and finds a station |
 | `systemadmin` | everything, the certificates included |
 
 `viewer` and `systemadmin` are the node's, the other two are in
-`VehicleAccess.cs`. The certificates are the one resource nobody but the
+`VehicleAccess.cs`. The certificates are a resource nobody but the
 administrators may edit, which includes choosing the ones a session uses:
 somebody who can add a root can make this vehicle believe a station nobody
-else would. The configuration file may add roles and say differently what
+else would. So is the SSH server, which the driver may not even read: its page
+shows every account's keys and who is signed in over SSH right now. The
+configuration file may add roles and say differently what
 one of them may do - see
 [WWCP_Node's README](https://github.com/OpenChargingCloud/WWCP_Node#who-may-sign-in).
 

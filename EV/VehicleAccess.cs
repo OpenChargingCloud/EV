@@ -83,8 +83,21 @@ namespace cloud.charging.open.EV
         /// servers or another link, and may not touch the certificates it is
         /// known by.
         /// </summary>
+        /// <remarks>
+        /// Reads every resource but the SSH server's, each named: what that
+        /// page shows - every account's keys, who is signed in over SSH right
+        /// now - is the administrators' and the garage's business, not the
+        /// driver's. Named rather than "everything", so a resource a new node
+        /// brings is read by the driver once somebody says so here.
+        /// </remarks>
         public static readonly Role  Driver   = new ("driver",
-                                                     [ Permission.Read(Permission.AnyResource),
+                                                     [ Permission.Read(NodeResources.Configuration),
+                                                       Permission.Read(NodeResources.DNS),
+                                                       Permission.Read(NodeResources.NTS),
+                                                       Permission.Read(NodeResources.Certificates),
+                                                       Permission.Read(Vehicle),
+                                                       Permission.Read(V2G),
+                                                       Permission.Read(Session),
                                                        Permission.Run (NodeResources.DNS),
                                                        Permission.Run (NodeResources.NTS),
                                                        Permission.Run (V2G),
