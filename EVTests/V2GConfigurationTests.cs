@@ -24,6 +24,7 @@ using NUnit.Framework;
 using cloud.charging.open.protocols.ISO15118.SDP.Messages;
 
 using cloud.charging.open.EV.Configuration;
+using cloud.charging.open.EV.ISO15118;
 
 #endregion
 
@@ -149,6 +150,34 @@ namespace cloud.charging.open.EV.Tests
 
             Assert.That(V2GConfiguration.TryParse(json, out _, out var error), Is.False);
             Assert.That(error, Does.Contain("v2g.requestedSecurity").And.Contain("tls").And.Contain("noTls"));
+
+        }
+
+        #endregion
+
+        #region ANoTLSAnswerIsRefusedAsTheAnswerToARequestForTLSOnly(Requested, Refuse, Refused)
+
+        /// <summary>
+        /// "Refuse a station that answers 'no TLS' to a request for TLS" refuses
+        /// it where TLS was asked for, and only there. The client refuses every
+        /// "no TLS" while it is told to, and was told to whatever was asked
+        /// for: a vehicle asking for no TLS refused the station offering none,
+        /// and found nothing on a link that had it on it.
+        /// </summary>
+        [TestCase(SDP_Security.TLS,    true,  true)]
+        [TestCase(SDP_Security.TLS,    false, false)]
+        [TestCase(SDP_Security.NoTLS,  true,  false)]
+        [TestCase(SDP_Security.NoTLS,  false, false)]
+        public void ANoTLSAnswerIsRefusedAsTheAnswerToARequestForTLSOnly(SDP_Security  Requested,
+                                                                        Boolean       Refuse,
+                                                                        Boolean       Refused)
+        {
+
+            var options = V2GLink.OptionsFor(null!, new V2GConfiguration(RequestedSecurity:     Requested,
+                                                                         RejectNoTLSResponses:  Refuse));
+
+            Assert.That(options.RequestedSecurity,     Is.EqualTo(Requested));
+            Assert.That(options.RejectNoTlsResponses,  Is.EqualTo(Refused));
 
         }
 

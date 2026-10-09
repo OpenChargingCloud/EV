@@ -27,6 +27,7 @@ using cloud.charging.open.protocols.ISO15118.SDP.Client;
 using cloud.charging.open.protocols.ISO15118.SDP.Messages;
 using cloud.charging.open.protocols.ISO15118.SharedCC;
 using cloud.charging.open.protocols.ISO15118.Slac;
+using cloud.charging.open.protocols.ISO15118.SLAC.Selection;
 using cloud.charging.open.protocols.ISO15118.SLAC.StateMachine;
 using cloud.charging.open.protocols.ISO15118.SLAC.Transport;
 using cloud.charging.open.protocols.ISO15118.T1S;
@@ -52,12 +53,14 @@ namespace cloud.charging.open.EV.ISO15118
     /// <remarks>
     /// Two fields rather than one, because the JSON is for reading and the endpoint is for using, and
     /// digging the second back out of the first is how an address loses its scope id. <see cref="Found"/>
-    /// is null for every outcome but "found".
+    /// is null for every outcome but "found", and <see cref="All"/> empty.
     /// </remarks>
     /// <param name="JSON">The discovery, as the web interface reads it.</param>
     /// <param name="Found">The station to connect to, with the discovery interface's scope id attached.</param>
-    public sealed record DiscoveryOutcome(JObject       JSON,
-                                          SeccEndpoint? Found);
+    /// <param name="All">Every station that answered usably, in the order the JSON names them - "secc" first, then "others" - each with the scope id attached, so that a page may send the vehicle to any of them.</param>
+    public sealed record DiscoveryOutcome(JObject                      JSON,
+                                          SeccEndpoint?                Found,
+                                          IReadOnlyList<SeccEndpoint>? All = null);
 
 
     /// <summary>
@@ -237,15 +240,24 @@ namespace cloud.charging.open.EV.ISO15118
         /// </summary>
         public static EVCC_SDPClientOptions OptionsFor(V2GNetworkInterface  Interface,
                                                        V2GConfiguration     Settings)
+        {
 
-            => new () {
+            var requested = Settings.RequestedSecurity ?? SDP_Security.TLS;
+
+            return new () {
                    Interface                    = Interface,
-                   RequestedSecurity            = Settings.RequestedSecurity           ?? SDP_Security.TLS,
+                   RequestedSecurity            = requested,
                    RequestedTransport           = SDP_TransportProtocol.TCP,
                    PerAttemptTimeout            = Settings.PerAttemptTimeout           ?? DefaultPerAttemptTimeout,
                    MaxRetries                   = Settings.MaxRetries                  ?? DefaultMaxRetries,
                    TotalDeadline                = Settings.TotalDeadline               ?? DefaultTotalDeadline,
-                   RejectNoTlsResponses         = Settings.RejectNoTLSResponses        ?? true,
+                   // Refusing "no TLS" is refusing it as the answer to a request
+                   // for TLS, as the setting says. The client refuses every
+                   // "no TLS" while it is told to, so it is told to only where
+                   // TLS was asked for: asking for none and refusing the
+                   // station that offers none found nothing on a link that had
+                   // exactly the station asked for on it.
+                   RejectNoTlsResponses         = requested == SDP_Security.TLS && (Settings.RejectNoTLSResponses ?? true),
                    RequireLinkLocalSeccAddress  = Settings.RequireLinkLocalSECCAddress ?? true,
 
                    // Every answer, not only the first: a link with two stations
@@ -256,6 +268,8 @@ namespace cloud.charging.open.EV.ISO15118
 
                    MulticastLoopback            = Settings.MulticastLoopback           ?? false
                };
+
+        }
 
         #endregion
 
@@ -351,7 +365,9 @@ namespace cloud.charging.open.EV.ISO15118
                                    // The interface's index, so that a link-local
                                    // address the station sent without one can be
                                    // routed back down the link it arrived on.
-                                   SeccEndpoint.FromSdp(success.Response, Interface.Index)
+                                   SeccEndpoint.FromSdp(success.Response, Interface.Index),
+                                   [ SeccEndpoint.FromSdp(success.Response, Interface.Index),
+                                     .. success.AdditionalResponses.Select(response => SeccEndpoint.FromSdp(response, Interface.Index)) ]
                                );
 
 
@@ -715,13 +731,21 @@ namespace cloud.charging.open.EV.ISO15118
                                                 bootstrapPeers: [ Peer ]
                                             );
 
-                var result = await new SlacEvStage(transport, new EvSlacOptions { PevId = new Byte[17] }).
-                                       PairAsync(CancellationToken);
+                // The session itself rather than SlacEvStage around it: the
+                // stage hands back the network it agreed on and nothing of
+                // who it agreed with, and which station answered loudest is
+                // what somebody plugging in wants to see. There is no chip to
+                // program on a simulated medium, which is all the stage adds.
+                await using var session = new EvSlacSession(transport, new EvSlacOptions { PevId = new Byte[17] });
+
+                await transport.StartAsync(CancellationToken);
+
+                var result = await session.RunAsync(CancellationToken);
 
                 watch.Stop();
 
-                Log.Notice($"SLAC: paired in {watch.Elapsed.TotalMilliseconds:F0} ms - " +
-                           $"network {Convert.ToHexString(result.Nid)}.",
+                Log.Notice($"SLAC: paired in {watch.Elapsed.TotalMilliseconds:F0} ms with {result.Winner.EVSEMACAddress} - " +
+                           $"network {Convert.ToHexString(result.MatchCnf.Nid)}.",
                            "15118", "slac");
 
                 return new JObject(
@@ -733,7 +757,12 @@ namespace cloud.charging.open.EV.ISO15118
                            // network membership key beside it: the NID is what
                            // says which pairing this was, and the NMK is the
                            // secret that pairing agreed on.
-                           new JProperty("nid",         Convert.ToHexString(result.Nid))
+                           new JProperty("nid",         Convert.ToHexString(result.MatchCnf.Nid)),
+                           // The station at the end of the cable - the one
+                           // that heard this vehicle loudest, at the lowest
+                           // attenuation - and every one that answered.
+                           new JProperty("station",     Candidate(result.Winner)),
+                           new JProperty("candidates",  new JArray(result.AllCandidates.Select(Candidate)))
                        );
 
             }
@@ -764,6 +793,29 @@ namespace cloud.charging.open.EV.ISO15118
                        );
 
             }
+
+        }
+
+        #endregion
+
+        #region (private) Candidate(Candidate)
+
+        /// <summary>
+        /// One station that answered a sounding: its MAC address, and how
+        /// loudly it heard this vehicle - the average attenuation, in dB,
+        /// where it reported a profile.
+        /// </summary>
+        private static JObject Candidate(EVSECandidate Candidate)
+        {
+
+            var json = new JObject(
+                           new JProperty("mac",  Candidate.EVSEMACAddress.ToString())
+                       );
+
+            if (Candidate.AverageAttenuation is Double attenuation)
+                json["attenuation_dB"] = Math.Round(attenuation, 1);
+
+            return json;
 
         }
 

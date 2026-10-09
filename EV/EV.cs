@@ -129,6 +129,13 @@ namespace cloud.charging.open.EV
         /// </remarks>
         private           SeccEndpoint?                   lastDiscoveryEndpoint;
 
+        /// <summary>
+        /// Every station the last discovery found, the first of them
+        /// <see cref="lastDiscoveryEndpoint"/>, in the order its answer names
+        /// them - empty when it found none.
+        /// </summary>
+        private           IReadOnlyList<SeccEndpoint>     lastDiscoveryEndpoints  = [];
+
         #endregion
 
         #region Properties
@@ -392,7 +399,8 @@ namespace cloud.charging.open.EV
                                                  new JProperty("error",      error)
                                              );
 
-                    lastDiscoveryEndpoint  = null;
+                    lastDiscoveryEndpoint   = null;
+                    lastDiscoveryEndpoints  = [];
 
                     return lastDiscovery;
 
@@ -414,6 +422,7 @@ namespace cloud.charging.open.EV
                 // interface it was heard on, and a session started right after
                 // a discovery is the one caller that needs it.
                 lastDiscoveryEndpoint   = found.Found;
+                lastDiscoveryEndpoints  = found.All ?? [];
 
                 return lastDiscovery;
 
@@ -561,6 +570,7 @@ namespace cloud.charging.open.EV
                 {
                     sessionLock.  Dispose();
                     discoveryLock.Dispose();
+                    linkLock.     Dispose();
                 }
                 finally
                 {

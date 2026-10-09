@@ -257,6 +257,10 @@ namespace cloud.charging.open.EV
 
                    new JProperty("lastDiscovery",                lastDiscovery),
 
+                   // How this vehicle is plugged in, or null: what the last
+                   // discovery was asked over, and what a session runs over.
+                   new JProperty("link",                         LinkJSON),
+
                    new JProperty("file",                         ConfigFile.Path)
 
                );

@@ -1,8 +1,36 @@
 // The web interface of an electric vehicle. What every node shows alike - the
 // frame, the forms, sign-in, logs, DNS, NTS, pins, the certificate store, a
 // commit - is WWCP_Node's, in the vehicle's colour. What only the vehicle's
-// own pages need would go below it, and nothing does any more.
+// own pages need goes below it.
 @use '@node/styles/node' as * with (
     $color-accent:       #1b7f4d,
     $color-accent-dark:  #14633c
 );
+
+
+// The Stations page: the ways of plugging in and the fields of the one chosen,
+// spaced as the rest of the form is - inside a form-stack, a wrapper of their
+// own would otherwise run them together - and the stations found, one below
+// the other with a line between.
+.choices,
+.stage {
+    display:         flex;
+    flex-direction:  column;
+    gap:             0.85rem;
+}
+
+.stage[hidden] {
+    display:  none;
+}
+
+// What each way is, beside its name - in the weight of a hint, and not in the
+// switch's.
+.choices .muted {
+    font-weight:  normal;
+}
+
+.stations .station + .station {
+    border-top:   1px solid $color-border;
+    margin-top:   0.85rem;
+    padding-top:  0.85rem;
+}

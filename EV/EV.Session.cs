@@ -110,7 +110,7 @@ namespace cloud.charging.open.EV
         #endregion
 
 
-        #region RunSessionAsync(Connect = null, Pause = false, ResumeFrom = null, PauseResume = false, ...)
+        #region RunSessionAsync(Connect = null, Pause = false, ResumeFrom = null, PauseResume = false, Station = null, TLS = null, ...)
 
         /// <summary>
         /// Drive up to a station and charge.
@@ -119,6 +119,10 @@ namespace cloud.charging.open.EV
         /// The whole of it: the SLAC pairing where one is configured, then the station - named or found
         /// over SDP - then the protocol handshake, then the session itself to <c>SessionStop</c>.
         ///
+        /// Where this vehicle is plugged in - see <see cref="PlugInAsync"/> - the link it holds is the one
+        /// the session runs over, and neither a pairing nor the bus is asked for a second time: plugged in
+        /// directly, there is none of either, whatever the settings say.
+        ///
         /// One at a time. A second request while one is running is answered with what is happening rather
         /// than queued behind it.
         /// </remarks>
@@ -126,11 +130,15 @@ namespace cloud.charging.open.EV
         /// <param name="Pause">Whether to end the session paused rather than terminated, so that it can be rejoined later.</param>
         /// <param name="ResumeFrom">A paused session's identification in hexadecimal, to rejoin one this vehicle did not pause itself.</param>
         /// <param name="PauseResume">Pause after charging, reconnect, and rejoin - both halves in one run.</param>
+        /// <param name="Station">One of the stations the last discovery found, by its place in the answer - 0 the first one - instead of a station named or looked for.</param>
+        /// <param name="TLS">How to secure this run's connection, instead of what the settings say.</param>
         /// <param name="CancellationToken">Abort the session. What has already been metered stays metered.</param>
         public async Task<JObject> RunSessionAsync(String?            Connect             = null,
                                                    Boolean            Pause               = false,
                                                    String?            ResumeFrom          = null,
                                                    Boolean            PauseResume         = false,
+                                                   Int32?             Station             = null,
+                                                   TlsStack?          TLS                 = null,
                                                    CancellationToken  CancellationToken   = default)
         {
 
@@ -139,6 +147,45 @@ namespace cloud.charging.open.EV
                            new JProperty("outcome",  "busy"),
                            new JProperty("error",    "A session is already running on this vehicle. It appears in the log as it happens, and on this page when it ends.")
                        );
+
+            // The link for as long as the session runs: nobody plugs this
+            // vehicle in elsewhere or out under it.
+            if (!await linkLock.WaitAsync(0, CancellationToken))
+            {
+                sessionLock.Release();
+                return new JObject(
+                           new JProperty("outcome",  "busy"),
+                           new JProperty("error",    "This vehicle is being plugged in or out. Charge once it is.")
+                       );
+            }
+
+            // Which of the found stations, settled before anything is said on
+            // the link: a place in an answer that is not there is a mistake in
+            // the request, not a failed session.
+            SeccEndpoint? chosen = null;
+
+            if (Station is Int32 place)
+            {
+
+                var found = lastDiscoveryEndpoints;
+
+                if (place < 0 || place >= found.Count)
+                {
+                    linkLock.Release();
+                    sessionLock.Release();
+                    return new JObject(
+                               new JProperty("outcome",  "noStation"),
+                               new JProperty("error",    found.Count == 0
+                                                             ? "The last discovery found no station to charge at. Look for one first."
+                                                             : $"The last discovery found {found.Count} station(s), and there is no station {place} among them.")
+                           );
+                }
+
+                chosen = found[place];
+
+            }
+
+            var held = pluggedIn;
 
             // Linked, so that either the browser going away or the Stop button
             // ends it - and so that the token the state machines are given is
@@ -156,9 +203,9 @@ namespace cloud.charging.open.EV
                 // vehicle this is what decides which of the stations that can
                 // hear it is the one its cable is plugged into, and it happens
                 // before there is an IP link to discover anything over.
-                JObject? slac = null;
+                JObject? slac = held?.SLAC;
 
-                if (SessionSettings.SLACPeer is { } peer)
+                if (held is null && SessionSettings.SLACPeer is { } peer)
                 {
 
                     var endpoint = V2GEndpoint.Parse(peer, "'session.slacPeer'");
@@ -182,9 +229,11 @@ namespace cloud.charging.open.EV
                 // the station asks every cycle, for as long as it is plugged
                 // in, and a session that attached and never left would leave
                 // the station polling a node that had driven away.
-                JObject? t1s = null;
+                // Plugged in, the bus this vehicle is on is the one it stays
+                // on, and leaving it is unplugging - not this session ending.
+                JObject? t1s = held?.Bus?.JSON;
 
-                await using var bus = SessionSettings.T1STransportInEffect != T1STransportKind.None
+                await using var bus = held is null && SessionSettings.T1STransportInEffect != T1STransportKind.None
                                           ? await V2GLink.AttachAsync(
                                                 V2GLink.T1SMediumFor(SessionSettings, V2GSettings.InterfaceName),
                                                 SessionSettings.T1SWeightInEffect,
@@ -209,7 +258,7 @@ namespace cloud.charging.open.EV
 
                 #region Where to
 
-                var station = await StationForSessionAsync(Connect, cancellation.Token);
+                var station = await StationForSessionAsync(Connect, chosen, TLS, cancellation.Token);
 
                 if (station.Endpoint is null)
                     return Remember(Failed(station.Outcome, station.Error!, slac, station.Discovery));
@@ -218,7 +267,7 @@ namespace cloud.charging.open.EV
 
                 #region What to run it with
 
-                var options = OptionsFor(station.Endpoint, Pause || PauseResume, ResumeFrom);
+                var options = OptionsFor(station.Endpoint, Pause || PauseResume, ResumeFrom, TLS);
 
                 #endregion
 
@@ -261,7 +310,7 @@ namespace cloud.charging.open.EV
                     // this run is discovering: a station that moved ports
                     // between the two halves is exactly what the second half
                     // is there to survive.
-                    var again  = await StationForSessionAsync(Connect, cancellation.Token);
+                    var again  = await StationForSessionAsync(Connect, chosen, TLS, cancellation.Token);
 
                     if (again.Endpoint is null)
                         return Remember(Failed(again.Outcome, again.Error!, slac, again.Discovery, first.JSON));
@@ -321,6 +370,7 @@ namespace cloud.charging.open.EV
                 sessionCancellation = null;
 
                 cancellation.Dispose();
+                linkLock.Release();
                 sessionLock.Release();
 
             }
@@ -466,16 +516,24 @@ namespace cloud.charging.open.EV
         #endregion
 
 
-        #region (private) StationForSessionAsync(Connect, CancellationToken)
+        #region (private) StationForSessionAsync(Connect, Chosen, TLS, CancellationToken)
 
         /// <summary>
-        /// Where this session goes: what the caller named, what the file says, or whatever answers on the
-        /// link.
+        /// Where this session goes: one of the stations the last discovery found, what the caller named,
+        /// what the file says, or whatever answers on the link.
         /// </summary>
         private async Task<(SeccEndpoint? Endpoint, String Outcome, String? Error, JObject? Discovery)>
             StationForSessionAsync(String?            Connect,
+                                   SeccEndpoint?      Chosen,
+                                   TlsStack?          TLS,
                                    CancellationToken  CancellationToken)
         {
+
+            // Found already, and chosen from what was found: its address
+            // carries the scope id of the interface it answered on.
+            if (Chosen is not null)
+                return (Chosen with { Tls = (TLS ?? SessionSettings.TLS ?? TlsStack.None) != TlsStack.None },
+                        "chosen", null, null);
 
             var named = Connect ?? SessionSettings.Connect;
 
@@ -492,7 +550,7 @@ namespace cloud.charging.open.EV
                                 ? address
                                 : (await Dns.GetHostAddressesAsync(endpoint.Host, CancellationToken)).First(),
                             endpoint.Port,
-                            (SessionSettings.TLS ?? TlsStack.None) != TlsStack.None
+                            (TLS ?? SessionSettings.TLS ?? TlsStack.None) != TlsStack.None
                         ),
                         "named", null, null);
 
@@ -524,7 +582,7 @@ namespace cloud.charging.open.EV
 
         #endregion
 
-        #region (private) OptionsFor(Station, Pause, ResumeFrom)
+        #region (private) OptionsFor(Station, Pause, ResumeFrom, TLS)
 
         /// <summary>
         /// One run, assembled: what the file says, what this vehicle is, and the defaults wherever neither
@@ -532,7 +590,8 @@ namespace cloud.charging.open.EV
         /// </summary>
         private SessionOptions OptionsFor(SeccEndpoint  Station,
                                           Boolean       Pause,
-                                          String?       ResumeFrom)
+                                          String?       ResumeFrom,
+                                          TlsStack?     TLS)
         {
 
             var settings = SessionSettings;
@@ -555,7 +614,7 @@ namespace cloud.charging.open.EV
                        OfferBoth            = settings.OfferBoth ?? true,
                        Mode                 = settings.Mode      ?? PowerMode.Dc,
                        MCS                  = settings.MCS       ?? false,
-                       TLS                  = settings.TLS       ?? TlsStack.None,
+                       TLS                  = TLS ?? settings.TLS ?? TlsStack.None,
 
                        PKIDirectory         = settings.PKIDirectory,
 

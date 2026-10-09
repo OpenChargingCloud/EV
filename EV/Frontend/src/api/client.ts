@@ -87,7 +87,7 @@ export interface V2GInterface {
     mac:        string;
 }
 
-/** One vehicle that answered an SDP request. */
+/** One station that answered an SDP request. */
 export interface SECC {
     /** The address in the payload: where the vehicle would connect. */
     address:    string;
@@ -136,10 +136,45 @@ export interface V2GConfiguration {
         multicastLoopback:            boolean;
     };
     lastDiscovery:  DiscoveryResult | null;
+    /** How this vehicle is plugged in, or null where it is not. */
+    link:           Link | null;
     file:           string;
     /** Only on the answer to a discovery. */
     result?:        DiscoveryResult;
 }
+
+/** How a vehicle is plugged in: straight onto the link, after a SLAC pairing, or onto a coupler's bus. */
+export type LinkMedium = 'direct' | 'slac' | 't1s';
+
+/** A link this vehicle holds until it is unplugged, and what plugging in said. */
+export interface Link {
+    outcome:  'pluggedIn';
+    via:      LinkMedium;
+    since:    string;
+    slac?:    SlacResult;
+    t1s?:     T1SResult;
+}
+
+/**
+ * Plugging in: how, and - for this plugging in only - the SLAC peer and the
+ * bus where they differ from the session settings.
+ */
+export interface LinkRequest {
+    via:            LinkMedium;
+    slacPeer?:      string;
+    t1sTransport?:  'auto' | 'afpacket' | 'udp';
+    t1sBus?:        string;
+    t1sInterface?:  string;
+    t1sWeight?:     number;
+}
+
+/** What came of plugging in: the link, or why there is none. */
+export type PlugInResult = Link | {
+    outcome:  'notConfigured' | 'busy' | 'failed' | 'cancelled' | 'notAttached' | 'declined' | 'noMedium';
+    error:    string;
+    slac?:    SlacResult;
+    t1s?:     T1SResult;
+};
 
 /**
  * What a save sends. Only the fields given are changed - with one exception:
@@ -168,7 +203,18 @@ export interface SlacResult {
     peer?:        string;
     /** The network identifier. The key it agreed on is deliberately not here. */
     nid?:         string;
+    /** The station at the end of the cable: the one that heard the vehicle loudest. */
+    station?:     SlacStation;
+    /** Every station that answered the sounding. */
+    candidates?:  SlacStation[];
     error?:       string;
+}
+
+/** One station that answered a SLAC sounding, and how loudly it heard the vehicle. */
+export interface SlacStation {
+    mac:              string;
+    /** The average attenuation, in dB: the lower, the louder. */
+    attenuation_dB?:  number;
 }
 
 /** One attachment to the coupler's 10BASE-T1S bus: which medium, and as which node. */
@@ -360,6 +406,10 @@ export interface SessionUpdate {
 export interface SessionStart {
     /** A station for this run only; without one, the configured one or SDP. */
     connect?:      string;
+    /** One of the stations the last discovery found, by its place in the answer: 0 the first. */
+    station?:      number;
+    /** How this run's connection is secured, instead of what the settings say. */
+    tls?:          'none' | 'dotnet' | 'bc';
     /** End paused rather than terminated, so that it can be rejoined. */
     pause?:        boolean;
     /** Rejoin this paused session, by its identification in hexadecimal. */
@@ -412,6 +462,20 @@ export const api = {
          * 1200 ms - so unlike a session this one is waited for.
          */
         pair: () => request<SlacResult>('POST', '/configuration/v2g/pair', {}, afterAsking([ 10 ]))
+
+    },
+
+    link: {
+
+        /**
+         * Plug in, and stay plugged in until unplugged: a session then runs
+         * over this link without pairing or joining the bus again. Seconds, as
+         * a pairing or joining a bus is, so waited for.
+         */
+        plugIn:  (how: LinkRequest) => request<Omit<V2GConfiguration, 'result'> & { result: PlugInResult }>('POST', '/link', how, afterAsking([ 15 ])),
+
+        /** Unplug: leave the bus, forget the pairing. */
+        unplug:  ()                 => request<V2GConfiguration>('DELETE', '/link')
 
     },
 

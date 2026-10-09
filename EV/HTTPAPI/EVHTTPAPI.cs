@@ -32,6 +32,10 @@ using cloud.charging.open.protocols.WWCP.Node.Certificates;
 using cloud.charging.open.protocols.WWCP.Node.Configuration;
 using cloud.charging.open.protocols.WWCP.Node;
 
+using cloud.charging.open.protocols.ISO15118.SharedCC;
+
+using cloud.charging.open.EV.Configuration;
+
 #endregion
 
 namespace cloud.charging.open.EV
@@ -111,6 +115,9 @@ namespace cloud.charging.open.EV
             AddHandler(HTTPPath.Root + "v1/configuration/v2g",        PutV2GConfiguration,      HTTPMethod.PUT);
             AddHandler(HTTPPath.Root + "v1/configuration/v2g/discover", PostV2GDiscover,        HTTPMethod.POST);
             AddHandler(HTTPPath.Root + "v1/configuration/v2g/pair",     PostSLACPair,           HTTPMethod.POST);
+
+            AddHandler(HTTPPath.Root + "v1/link",                     PostLink,                 HTTPMethod.POST);
+            AddHandler(HTTPPath.Root + "v1/link",                     DeleteLink,               HTTPMethod.DELETE);
 
             AddHandler(HTTPPath.Root + "v1/configuration/session",    GetSessionConfiguration,  HTTPMethod.GET);
             AddHandler(HTTPPath.Root + "v1/configuration/session",    PutSessionConfiguration,  HTTPMethod.PUT);
@@ -371,8 +378,8 @@ namespace cloud.charging.open.EV
         #region (private) PostSessionStart(Request) / PostSessionStop(Request)
 
         /// <summary>
-        /// POST /api/v1/session with an optional {"connect", "pause",
-        /// "resume", "pauseResume"}: drive up to a station and charge.
+        /// POST /api/v1/session with an optional {"connect", "station", "tls",
+        /// "pause", "resume", "pauseResume"}: drive up to a station and charge.
         /// </summary>
         /// <remarks>
         /// <b>This answers before the session is over, and on purpose.</b> A
@@ -388,6 +395,11 @@ namespace cloud.charging.open.EV
         /// cancelled token, and a session tied to it would end the moment it
         /// was reported as started. <see cref="EV.CancelSession"/> is what ends
         /// one, and POST .../stop is how somebody asks for that.
+        ///
+        /// "station" is one of the stations the last discovery found, by its
+        /// place in that answer - 0 the first - and "tls" how this run's
+        /// connection is secured: "none", "dotnet" or "bc". Both are this run's
+        /// alone, and change no setting.
         /// </remarks>
         private async Task<HTTPResponse> PostSessionStart(HTTPRequest Request)
         {
@@ -406,6 +418,37 @@ namespace cloud.charging.open.EV
             if (connect?.Length == 0)  connect = null;
             if (resume?.Length  == 0)  resume  = null;
 
+            Int32? station = null;
+
+            if (json.TryGetValue("station", out var stationToken) && stationToken.Type != JTokenType.Null)
+            {
+
+                if (stationToken.Type != JTokenType.Integer || stationToken.Value<Int32>() < 0)
+                    return ErrorJSON(Request, HTTPStatusCode.BadRequest,
+                                     "'station' is the place of a station in the last discovery's answer: 0, 1, ...");
+
+                station = stationToken.Value<Int32>();
+
+            }
+
+            TlsStack? tls = null;
+
+            if (json.TryGetValue("tls", out var tlsToken) && tlsToken.Type != JTokenType.Null)
+            {
+
+                // Read as the setting is, so that it says the same words where
+                // it is wrong.
+                if (!SessionConfiguration.TryParse(new JObject(new JProperty("tls", tlsToken)), out var parsed, out var tlsError))
+                    return ErrorJSON(Request, HTTPStatusCode.BadRequest, tlsError);
+
+                tls = parsed.TLS;
+
+            }
+
+            if (station is not null && connect is not null)
+                return ErrorJSON(Request, HTTPStatusCode.BadRequest,
+                                 "Name a station to connect to or choose one the last discovery found - not both.");
+
             if (resume is not null && !IsHexadecimal(resume))
                 return ErrorJSON(Request, HTTPStatusCode.BadRequest,
                                  "'resume' is a paused session's identification in hexadecimal.");
@@ -415,11 +458,11 @@ namespace cloud.charging.open.EV
                                  "A session is already running on this vehicle. Stop it first, or wait for it to end.");
 
             Log.Info($"'{user.Id}' asked this vehicle to charge " +
-                     $"{(connect is null ? "at whichever station it finds" : $"at {connect}")}.",
+                     $"{(station is not null ? $"at station {station} of the last discovery" : connect is null ? "at whichever station it finds" : $"at {connect}")}.",
                      "15118", "session", "web");
 
             // Started here and not awaited: see the remarks above.
-            var run = Vehicle.RunSessionAsync(connect, pause, resume, pauseResume);
+            var run = Vehicle.RunSessionAsync(connect, pause, resume, pauseResume, station, tls);
 
             // RunSessionAsync takes the vehicle's session lock and marks itself
             // running before its first real await, so by this line the vehicle
@@ -430,6 +473,16 @@ namespace cloud.charging.open.EV
             // then stops asking.
             while (!Vehicle.SessionRunning && !run.IsCompleted)
                 await Task.Delay(5, Request.CancellationToken);
+
+            // Over before it ran: refused without a word on the link - a
+            // station the last discovery did not find, a vehicle being plugged
+            // in. Said as what it is, and not as a session that started.
+            if (run.IsCompletedSuccessfully &&
+                run.Result.Value<String>("outcome") is "busy" or "noStation" &&
+                run.Result.Value<String>("error") is String notStarted)
+            {
+                return ErrorJSON(Request, HTTPStatusCode.Conflict, notStarted);
+            }
 
             // Observed rather than abandoned. RunSessionAsync answers instead of
             // throwing, so this is only the unforeseen half - but an exception
@@ -476,6 +529,89 @@ namespace cloud.charging.open.EV
             return Task.FromResult(
                        JSONResponse(Request, HTTPStatusCode.OK, new JObject(new JProperty("outcome", "stopping")))
                    );
+
+        }
+
+        #endregion
+
+        #region (private) PostLink(Request) / DeleteLink(Request)
+
+        /// <summary>
+        /// POST /api/v1/link with {"via"} - "direct", "slac" or "t1s" - and,
+        /// for this plugging in only, an optional "slacPeer", "t1sTransport",
+        /// "t1sBus", "t1sInterface" and "t1sWeight": plug this vehicle in, and
+        /// stay plugged in.
+        /// </summary>
+        /// <remarks>
+        /// Awaited, as a pairing is: seconds, not minutes. Answers with the whole
+        /// V2G configuration and the plugging in as "result", because plugging
+        /// in moves what the page shows as the link. At the permission a
+        /// discovery needs: it puts frames on the link, and changes no setting.
+        /// </remarks>
+        private async Task<HTTPResponse> PostLink(HTTPRequest Request)
+        {
+
+            if (!TryAuthorize(Request, Permission.Run (VehicleAccess.V2G), true, out var user, out var refused))
+                return refused;
+
+            if (!TryParseJSONObject(Request, out var json, out var errorResponse))
+                return errorResponse;
+
+            if (!EV.TryParseMedium(json.Value<String>("via"), out var medium))
+                return ErrorJSON(Request, HTTPStatusCode.BadRequest,
+                                 "'via' is how to plug in: \"direct\", \"slac\" or \"t1s\".");
+
+            // The stage's fields read as the settings are, so that they are
+            // refused in the same words - and none of them is saved.
+            var stageJSON = new JObject(
+                                new[] { "slacPeer", "t1sTransport", "t1sBus", "t1sInterface", "t1sWeight" }.
+                                    Where (field => json.TryGetValue(field, out var token) && token.Type != JTokenType.Null).
+                                    Select(field => new JProperty(field, json[field]))
+                            );
+
+            if (!SessionConfiguration.TryParse(stageJSON, out var stage, out var stageError))
+                return ErrorJSON(Request, HTTPStatusCode.BadRequest, stageError);
+
+            Log.Info($"'{user.Id}' asked this vehicle to plug in {(medium == LinkMedium.Direct ? "directly" : $"over {EV.Write(medium)}")}.",
+                     "15118", "link", "web");
+
+            var result = await Vehicle.PlugInAsync(medium, stage, Request.CancellationToken);
+
+            var answer = Vehicle.V2GConfigurationJSON();
+
+            answer["result"] = result;
+
+            return JSONResponse(Request,
+                                result.Value<String>("outcome") == "busy" ? HTTPStatusCode.Conflict : HTTPStatusCode.OK,
+                                answer);
+
+        }
+
+        /// <summary>
+        /// DELETE /api/v1/link: unplug this vehicle - leave the bus, forget the
+        /// pairing.
+        /// </summary>
+        private async Task<HTTPResponse> DeleteLink(HTTPRequest Request)
+        {
+
+            if (!TryAuthorize(Request, Permission.Run (VehicleAccess.V2G), true, out var user, out var refused))
+                return refused;
+
+            try
+            {
+
+                var was = await Vehicle.UnplugAsync();
+
+                if (was)
+                    Log.Info($"'{user.Id}' unplugged this vehicle.", "15118", "link", "web");
+
+                return JSONResponse(Request, HTTPStatusCode.OK, Vehicle.V2GConfigurationJSON());
+
+            }
+            catch (InvalidOperationException e)
+            {
+                return ErrorJSON(Request, HTTPStatusCode.Conflict, e.Message);
+            }
 
         }
 

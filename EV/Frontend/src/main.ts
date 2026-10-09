@@ -9,17 +9,18 @@ import { nodeMenu, startNode } from '@node/start';
 
 import { vehicleCertificates } from './certificates';
 
+import { stationsPage }      from './pages/stations';
 import { configurationPage } from './pages/configuration';
 import { vehiclePage }       from './pages/vehicle';
 import { v2gPage }           from './pages/v2g';
 import { sessionPage }       from './pages/session';
 
-// What a vehicle has pages for beside what every node has: itself and its
+// What a vehicle has pages for beside what every node has: the stations it
+// plugs in at and charges at - its "/", first in the menu - itself and its
 // battery, the wire below the charging cable, and charging. The sign-in, the
-// log, the name servers, the time servers, the certificate store, the frame,
-// "/" - the first page of the menu the account signed in may open - and
-// following the log while somebody is signed in are every node's - see
-// WWCP_Node's start.ts. Following the log is also what makes the ISO 15118
+// log, the name servers, the time servers, the certificate store, the frame
+// and following the log while somebody is signed in are every node's - see
+// WWCP_Node's start.ts. Following the log is also what makes the Stations
 // page worth watching: a discovery writes every attempt and every answer into
 // it as it happens.
 startNode({
@@ -28,6 +29,7 @@ startNode({
     icon:  'fa-car-side',
 
     menu: [
+        { path: '/',  label: 'Stations',  icon: 'fa-charging-station',  permission: [ 'v2g:read' ] },
         nodeMenu.configuration([
             nodeMenu.dns,
             nodeMenu.nts,
@@ -41,6 +43,7 @@ startNode({
 
     pages: {
 
+        '/':                            stationsPage,
         '/configuration':               configurationPage,
         '/configuration/vehicle':       vehiclePage,
         '/configuration/v2g':           v2gPage,

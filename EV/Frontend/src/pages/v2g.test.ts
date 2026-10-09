@@ -1,26 +1,22 @@
 /**
  * The ISO 15118 page drawn, in a document of happy-dom, against a stand-in
- * vehicle: what is typed into one of its two forms - and its focus - outlives
- * the other being saved and a discovery being drawn, a form saved says what
- * the vehicle took, one refused keeps what is typed and says why, and the
- * interfaces offered keep their option by name.
+ * vehicle: the interface saved says what the vehicle took, the interfaces
+ * offered keep their option by name, and a pairing says which station is at
+ * the end of the cable. Looking for a station, and what a discovery asks for,
+ * are the Stations page's - see stations.test.ts.
  */
 
-import { asked, field, open, refused, submit, until, type Asked } from '../../test/vehicle.ts';
-import { chromeTakesTheFocus } from '@node/../test/dom.ts';
+import { asked, field, open, submit, until, type Asked } from '../../test/vehicle.ts';
 
 import { strict as assert }  from 'node:assert';
 import { describe, it }      from 'node:test';
 
-import type { V2GConfiguration, V2GInterface, V2GUpdate } from '../api/client.ts';
+import type { SlacResult, V2GConfiguration, V2GInterface, V2GUpdate } from '../api/client.ts';
 
 const { v2gPage } = await import('./v2g.ts');
 
 
 let held: V2GConfiguration;
-
-/** Refuses a change of the settings where told to. */
-let refuseSettings = false;
 
 /** What a form says once its save went through - and not before: whileSaving() says "Saving ..." meanwhile. */
 const saved = 'Saved, and in effect for the next discovery.';
@@ -28,31 +24,23 @@ const saved = 'Saved, and in effect for the next discovery.';
 const eth0: V2GInterface = { name: 'eth0', index: 2, linkLocal: 'fe80::1%2', mac: '02:00:00:00:00:01' };
 const plc0: V2GInterface = { name: 'plc0', index: 3, linkLocal: 'fe80::2%3', mac: '02:00:00:00:00:02' };
 
+const paired: SlacResult = { outcome: 'paired', peer: '127.0.0.1:5000', nid: '0102030405060A', elapsed_ms: 1900,
+                             station: { mac: '02:00:00:00:00:AA', attenuation_dB: 12.5 } };
+
 function vehicle({ method, path, body }: Asked): unknown {
 
     if (path === '/configuration/v2g' && method === 'PUT') {
 
-        const update = body as V2GUpdate;
+        const { interface: chosen } = body as V2GUpdate;
 
-        if (refuseSettings && update.maxRetries !== undefined)
-            return refused(400, "'v2g.maxRetries' must be between 1 and 1000.");
-
-        const { interface: chosen, ...settings } = update;
-
-        // A vehicle takes what it takes: no more than a hundred attempts.
-        held = {
-            ...held,
-            interface:  chosen === undefined ? held.interface : chosen,
-            settings:   { ...held.settings, ...settings,
-                          maxRetries: Math.min(settings.maxRetries ?? held.settings.maxRetries, 100) }
-        };
+        held = { ...held, interface: chosen === undefined ? held.interface : chosen };
 
         return held;
 
     }
 
-    if (path === '/configuration/v2g/discover')
-        return { ...held, result: { outcome: 'timeout', attempts: 3, elapsed_ms: 750, interface: 'eth0' } };
+    if (path === '/configuration/v2g/pair')
+        return paired;
 
     if (path === '/configuration/v2g')
         return held;
@@ -68,24 +56,19 @@ async function opened(): Promise<HTMLElement> {
         settings:       { requestedSecurity: 'tls', perAttemptTimeoutSeconds: 0.25, maxRetries: 10, totalDeadlineSeconds: 5,
                           rejectNoTLSResponses: false, requireLinkLocalSECCAddress: true, multicastLoopback: false },
         lastDiscovery:  null,
+        link:           null,
         file:           'wwcp.json'
     };
-    refuseSettings = false;
     return open(v2gPage, '/configuration/v2g', [ 'v2g:read', 'v2g:edit', 'v2g:run' ],
-                vehicle, root => root.querySelector('#settings-form') !== null);
+                vehicle, root => root.querySelector('#interface-form') !== null);
 }
 
 
 describe('the ISO 15118 page', () => {
 
-    it('keeps what is typed into the settings, and its focus, while the interface is saved', async () => {
+    it('saves "the first one that could carry it" as no interface, and says so', async () => {
 
-        const root     = await opened();
-        const browser  = chromeTakesTheFocus(root);
-        const retries  = field(root, '#settings-form', 'maxRetries');
-
-        retries.value = '42';
-        retries.focus();
+        const root = await opened();
 
         field<HTMLSelectElement>(root, '#interface-form', 'interface').value = '';
 
@@ -93,67 +76,7 @@ describe('the ISO 15118 page', () => {
         await until(() => held.interface === null && root.querySelector('#interface-note')?.textContent === saved,
                     'the interface was not saved');
 
-        browser.disconnect();
-
-        assert.ok(field(root, '#settings-form', 'maxRetries') === retries, 'the field was made anew');
-        assert.equal(retries.value, '42');
-        assert.ok(document.activeElement === retries, 'the focus went');
-
-    });
-
-    it('keeps what is typed into the settings, and its focus, while a discovery is drawn', async () => {
-
-        const root     = await opened();
-        const deadline = field(root, '#settings-form', 'totalDeadlineSeconds');
-
-        deadline.value = '7.5';
-        deadline.focus();
-
-        root.querySelector<HTMLButtonElement>('#discover')!.click();
-        await until(() => /nothing answered/.test(root.textContent!) && !root.querySelector<HTMLButtonElement>('#discover')!.disabled,
-                    'the discovery was not drawn');
-
-        assert.ok(field(root, '#settings-form', 'totalDeadlineSeconds') === deadline, 'the field was made anew');
-        assert.equal(deadline.value, '7.5');
-        assert.ok(document.activeElement === deadline, 'the focus went');
-
-    });
-
-    it('shows the settings as the vehicle took them once they are saved, with nothing left to save', async () => {
-
-        const root     = await opened();
-        const retries  = field(root, '#settings-form', 'maxRetries');
-        const loopback = field(root, '#settings-form', 'multicastLoopback');
-
-        retries.value    = '500';
-        loopback.checked = true;
-
-        submit(root, '#settings-form');
-        await until(() => held.settings.maxRetries === 100 && root.querySelector('#settings-note')?.textContent === saved,
-                    'the settings were not saved');
-
-        assert.equal((asked.find(one => one.method === 'PUT')?.body as V2GUpdate).maxRetries, 500);
-        assert.equal(field(root, '#settings-form', 'maxRetries').value,         '100', 'the field says what was typed, not what the vehicle took');
-        assert.equal(field(root, '#settings-form', 'maxRetries').defaultValue,  '100');
-        assert.equal(field(root, '#settings-form', 'multicastLoopback').checked,         true);
-        assert.equal(field(root, '#settings-form', 'multicastLoopback').defaultChecked,  true);
-
-    });
-
-    it('keeps what is typed into settings the vehicle refused, and says why', async () => {
-
-        const root    = await opened();
-        const retries = field(root, '#settings-form', 'maxRetries');
-
-        refuseSettings = true;
-        retries.value  = '0';
-
-        submit(root, '#settings-form');
-        await until(() => root.querySelector('#settings-error')?.textContent !== '', 'the refusal was not said');
-
-        assert.equal(root.querySelector('#settings-error')!.textContent, "'v2g.maxRetries' must be between 1 and 1000.");
-        assert.ok(field(root, '#settings-form', 'maxRetries') === retries, 'the field was made anew');
-        assert.equal(retries.value, '0', 'what was typed went');
+        assert.equal((asked.find(one => one.method === 'PUT')?.body as V2GUpdate).interface, null);
 
     });
 
@@ -164,13 +87,26 @@ describe('the ISO 15118 page', () => {
 
         held = { ...held, interfaces: [ plc0, eth0 ] };
 
-        root.querySelector<HTMLButtonElement>('#discover')!.click();
+        root.querySelector<HTMLButtonElement>('#reload')!.click();
         await until(() => root.querySelector('#interface-form option[value="plc0"]') !== null, 'the new interface was not offered');
 
         assert.ok(root.querySelector('#interface-form option[value="eth0"]') === option, 'the option of eth0 was made anew');
         const card = root.querySelector('#interface-form')!.closest('section')!;
 
         assert.equal(card.querySelectorAll('.kv-list .kv .k')[0]!.textContent, 'plc0', 'the interfaces are not listed as offered');
+
+    });
+
+    it('says which station a pairing found at the end of the cable', async () => {
+
+        const root = await opened();
+
+        root.querySelector<HTMLButtonElement>('#pair')!.click();
+        await until(() => /paired/.test(root.textContent!) && !root.querySelector<HTMLButtonElement>('#pair')!.disabled,
+                    'the pairing was not drawn');
+
+        assert.match(root.textContent!.replace(/\s+/g, ' '), /The station at the cable\s*02:00:00:00:00:AA 12\.5 dB/);
+        assert.equal(root.querySelector('#discover'), null, 'looking for a station is the Stations page\'s');
 
     });
 

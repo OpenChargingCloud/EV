@@ -17,6 +17,7 @@ starts the thing; everything a vehicle *is* lives here.
 |---|---|
 | `EV.cs` | the vehicle: what it adds to a node - its battery, its JSON API, and one SDP discovery at a time |
 | `EV.Session.cs` | charging: one session at a time, and the handle a pause leaves behind |
+| `EV.Link.cs` | plugging in - directly, over SLAC or onto a coupler's 10BASE-T1S bus - and staying plugged in until unplugged |
 | `EV.Configuration.cs` | what the Configuration pages read and write of the vehicle's own - the battery, the link, the certificates, the session |
 | `VehicleAccess.cs` | who may do what: the vehicle's resources - `vehicle`, `v2g`, `session` - and its driver and its service |
 | `HTTPAPI/EVHTTPAPI.cs` | what the vehicle adds to the JSON API every node answers at `/api` - its settings, V2G and the session; the rest, the Server-Sent Events stream everything travels on included, is WWCP_Node's `NodeHTTPAPI` |
@@ -147,6 +148,38 @@ than one that came and went inside a single cycle.
 It answers rather than throws where it cannot run: `notConfigured` when no
 T1S transport has been named, `busy` while a session holds the bus. Both are
 states somebody can be in on purpose, and neither is a fault.
+
+
+## Plugged in, and staying plugged in
+
+The Stations page - the web interface's `/`, first in its menu - is where a
+station is looked for and charged at, and it starts with how the vehicle is
+plugged in: directly, with nothing before SDP; over SLAC, whose sounding finds
+the station at the end of the cable, the one that heard the vehicle loudest;
+or onto the 10BASE-T1S bus of an MCS coupler, which has one station on it.
+`POST /api/v1/link` with `{"via": "direct" | "slac" | "t1s"}` plugs in, and the
+vehicle stays plugged in - paired, or on the bus - until `DELETE
+/api/v1/link` unplugs it, a second plugging in replaces the first, or the
+vehicle stops. A SLAC peer and a bus given with it are that plugging in's
+alone; the session settings stay what they are. What plugging in said - the
+station at the cable and every one that answered, each with its attenuation,
+or the bus and the node the vehicle is on it - is in the V2G configuration as
+`link`.
+
+Then one SDP request goes onto the link as before, and every station that
+answers usably is offered. `POST /api/v1/session` with `{"station": n}` charges
+at the n-th of them, by its place in the last discovery's answer, and with
+`"tls"` - `none`, `dotnet` or `bc` - secures that run as chosen beside the
+station, without changing a setting. A session runs over the link the vehicle
+holds and neither pairs nor joins a bus a second time; plugged in directly, it
+does neither whatever the settings say. Not plugged in, a session does what
+it always did: the stages the settings name, then the station named or found.
+
+`EVTests/VehicleConformance.Link.cs` plugs in against a station of the
+reference implementation in the same process, takes the station's SLAC side
+away again, and charges: a session that paired a second time would find
+nobody to pair with. It joins a coupler's emulated bus as well, and leaves it
+when unplugged.
 
 
 ## The session is somebody else's code
