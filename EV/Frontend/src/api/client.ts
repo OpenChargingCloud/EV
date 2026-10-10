@@ -275,6 +275,8 @@ export interface SessionRun {
     renegotiations?:     number;
     paused?:             boolean;
     pausedSessionId?:    string;
+    /** -20 only: the station told the vehicle to end the charging, so it ended the session for good. */
+    terminatedByStation?: boolean;
     resumeRefused?:      boolean;
     /** -20 only: whether a rejoined session was proved to be with the same station. */
     sameStation?:        boolean | null;

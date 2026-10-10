@@ -353,6 +353,16 @@ namespace cloud.charging.open.EV.ISO15118
             if (evcc.Battery is { } battery && evcc.BatteryStop is { } stop)
                 Log.Notice(battery.Describe(stop), "15118", "session");
 
+            // EVSENotification Terminate: the vehicle ended the session for
+            // good, whatever it was told to do, so a pause asked for is not
+            // what happened, and there is nothing to rejoin.
+            if (evcc.TerminatedByStation)
+                Log.Warning("Session: the station told the vehicle to end the charging (EVSENotification Terminate) - " +
+                            (Options.Pause
+                                 ? "terminated rather than paused, so there is no session to rejoin."
+                                 : "terminated."),
+                            "15118", "session");
+
             var installedChainsTo = (String?) null;
 
             if (evcc.InstalledContractCertificate is { } installed)
@@ -428,7 +438,8 @@ namespace cloud.charging.open.EV.ISO15118
                            new JProperty("exchanges",         evcc.Exchanges),
                            new JProperty("bytesOnWire",       evcc.BytesOnWire),
                            new JProperty("authorization",     evcc.AuthorizationMode),
-                           new JProperty("paused",            Options.Pause),
+                           new JProperty("paused",            Options.Pause && !evcc.TerminatedByStation),
+                           new JProperty("terminatedByStation", evcc.TerminatedByStation),
                            new JProperty("resumeRefused",     evcc.ResumeRefused),
                            new JProperty("sameStation",       evcc.ResumedStationVerified),
                            new JProperty("contractInstalled", evcc.InstalledContractCertificate is not null),
@@ -443,7 +454,7 @@ namespace cloud.charging.open.EV.ISO15118
                                                                     ))
                        );
 
-            return new SessionResult(json, evcc.PausedSession);
+            return new SessionResult(json, evcc.TerminatedByStation ? null : evcc.PausedSession);
 
         }
 

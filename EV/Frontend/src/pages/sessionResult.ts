@@ -30,6 +30,10 @@ export function sessionResult(run: SessionRun): TemplateResult {
 
             ${run.battery ? html`<h3>Battery</h3>${battery(run.battery)}` : nothing}
 
+            ${run.terminatedByStation
+                  ? html`<p class="hint">The station told the vehicle to end the charging, so the session ended for good - not paused, whatever this run asked for, and with nothing to rejoin.</p>`
+                  : nothing}
+
             ${run.contractInstalled
                   ? html`<p class="hint">A contract certificate was issued and its private key unwrapped - the ECDH round trip closed.</p>`
                   : nothing}

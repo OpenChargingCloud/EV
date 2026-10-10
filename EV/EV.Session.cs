@@ -301,6 +301,26 @@ namespace cloud.charging.open.EV
 
                     var first  = await V2GSession.RunAsync(options, Log, cancellation.Token);
 
+                    // Ended by the station rather than paused: there is no
+                    // second half, and no station to reconnect to for one.
+                    if (first.Paused is null)
+                    {
+
+                        Log.Notice("Session: not rejoined - the session ended rather than paused, so there is nothing to rejoin.",
+                                   "15118", "session");
+
+                        pausedSession = null;
+
+                        if (slac is not null)
+                            first.JSON["slac"] = slac;
+
+                        if (t1s is not null)
+                            first.JSON["t1s"] = t1s;
+
+                        return Remember(first.JSON);
+
+                    }
+
                     Log.Notice($"Session: paused ({Convert.ToHexString(first.Paused?.SessionId ?? [])}); reconnecting to rejoin it.",
                                "15118", "session");
 
