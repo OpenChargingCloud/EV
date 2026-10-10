@@ -24,6 +24,7 @@ using NUnit.Framework;
 
 using cloud.charging.open.protocols.ISO15118.Sap;
 using cloud.charging.open.protocols.ISO15118.StateMachines;
+using cloud.charging.open.protocols.ISO15118.StateMachines.Iso2;
 using cloud.charging.open.protocols.ISO15118.StateMachines.Iso20;
 using cloud.charging.open.protocols.ISO15118.Transport;
 
@@ -34,30 +35,32 @@ namespace cloud.charging.open.EV.Tests
 
     /// <summary>
     /// A station that tells the vehicle to end the charging - EVSENotification
-    /// Terminate in an ISO 15118-20 charge-loop response, as a station does
-    /// whose coupler got too hot: the vehicle ends the session for good, even
-    /// where it was told to pause it, and nothing is left to rejoin.
+    /// Terminate in an ISO 15118-20 charge-loop response, StopCharging in an
+    /// ISO 15118-2 one, as a station does whose coupler got too hot: the
+    /// vehicle ends the session for good, even where it was told to pause it,
+    /// and nothing is left to rejoin.
     /// </summary>
     public partial class VehicleConformance
     {
 
-        #region ToldTerminateAPausingVehicleLeavesNothingToRejoin()
+        #region ToldTerminateAPausingVehicleLeavesNothingToRejoin(Protocol)
 
         /// <summary>
         /// Asked to end paused, told Terminate by the station: the run says the
         /// station ended it, not that it paused, keeps no paused session to
         /// rejoin, and the log says why.
         /// </summary>
-        [Test]
-        public async Task ToldTerminateAPausingVehicleLeavesNothingToRejoin()
+        [TestCase("2")]
+        [TestCase("20")]
+        public async Task ToldTerminateAPausingVehicleLeavesNothingToRejoin(String Protocol)
         {
 
-            var vehicle  = TerminateReady();
+            var vehicle  = TerminateReady(Protocol);
 
             using var listener  = new TcpV2GListener(new IPEndPoint(IPAddress.Loopback, 0));
             using var timeout   = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
-            var station  = OneTerminatingSessionAt(listener);
+            var station  = OneTerminatingSessionAt(listener, Protocol);
             var run      = await vehicle.RunSessionAsync(Connect:            $"127.0.0.1:{listener.LocalEndpoint.Port}",
                                                          Pause:              true,
                                                          CancellationToken:  timeout.Token);
@@ -81,23 +84,24 @@ namespace cloud.charging.open.EV.Tests
 
         #endregion
 
-        #region ToldTerminateAPauseAndRejoinDoesNotRejoin()
+        #region ToldTerminateAPauseAndRejoinDoesNotRejoin(Protocol)
 
         /// <summary>
         /// A pause and a rejoin in one run, told Terminate in its first half:
         /// there is no second half, because there is no paused session for one
         /// to rejoin - it does not reconnect to a station that ended it.
         /// </summary>
-        [Test]
-        public async Task ToldTerminateAPauseAndRejoinDoesNotRejoin()
+        [TestCase("2")]
+        [TestCase("20")]
+        public async Task ToldTerminateAPauseAndRejoinDoesNotRejoin(String Protocol)
         {
 
-            var vehicle  = TerminateReady();
+            var vehicle  = TerminateReady(Protocol);
 
             using var listener  = new TcpV2GListener(new IPEndPoint(IPAddress.Loopback, 0));
             using var timeout   = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
-            var station  = OneTerminatingSessionAt(listener);
+            var station  = OneTerminatingSessionAt(listener, Protocol);
             var run      = await vehicle.RunSessionAsync(Connect:            $"127.0.0.1:{listener.LocalEndpoint.Port}",
                                                          PauseResume:        true,
                                                          CancellationToken:  timeout.Token);
@@ -119,19 +123,19 @@ namespace cloud.charging.open.EV.Tests
         #endregion
 
 
-        #region (private) TerminateReady()
+        #region (private) TerminateReady(Protocol)
 
         /// <summary>
-        /// The vehicle, set to ISO 15118-20 and to a goal the station's Terminate
-        /// comes before.
+        /// The vehicle, set to the given protocol and to a goal the station's
+        /// Terminate comes before.
         /// </summary>
-        private EV TerminateReady()
+        private EV TerminateReady(String Protocol)
         {
 
             var vehicle = (EV) Node;
 
             Assert.That(vehicle.TryUpdateSessionConfiguration(new JObject {
-                                                                  ["protocol"]                = "20",
+                                                                  ["protocol"]                = Protocol,
                                                                   ["maxChargingTimeSeconds"]  = 300
                                                               },
                                                               out var refused),
@@ -143,23 +147,41 @@ namespace cloud.charging.open.EV.Tests
 
         #endregion
 
-        #region (private static) OneTerminatingSessionAt(Listener)
+        #region (private static) OneTerminatingSessionAt(Listener, Protocol)
 
         /// <summary>
-        /// One ISO 15118-20 DC session at the listener's port, of a reference
-        /// station that says Terminate in its first charge-loop response.
+        /// One DC session of the given protocol at the listener's port, of a
+        /// reference station that says Terminate - over -2 StopCharging - in its
+        /// first charge-loop response.
         /// </summary>
-        private static async Task OneTerminatingSessionAt(TcpV2GListener Listener)
+        private static async Task OneTerminatingSessionAt(TcpV2GListener  Listener,
+                                                          String          Protocol)
         {
 
             using var stream = await Listener.AcceptAsync();
 
-            await SapHandshake.RunSeccSideAsync(stream, ProtocolVariant.Iso15118_20, mode: PowerMode.Dc);
+            if (Protocol == "2")
+            {
 
-            var station = new Secc20Dc(TimeSpan.FromSeconds(60), TimeProvider.System);
-            station.Terminate();
+                await SapHandshake.RunSeccSideAsync(stream, ProtocolVariant.Iso15118_2, mode: PowerMode.Dc);
 
-            await station.RunAsync(stream);
+                var station = new Secc2(PowerMode.Dc, TimeSpan.FromSeconds(60), TimeProvider.System);
+                station.StopCharging();
+
+                await station.RunAsync(stream);
+
+            }
+            else
+            {
+
+                await SapHandshake.RunSeccSideAsync(stream, ProtocolVariant.Iso15118_20, mode: PowerMode.Dc);
+
+                var station = new Secc20Dc(TimeSpan.FromSeconds(60), TimeProvider.System);
+                station.Terminate();
+
+                await station.RunAsync(stream);
+
+            }
 
         }
 

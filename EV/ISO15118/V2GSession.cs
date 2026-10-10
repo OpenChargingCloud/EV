@@ -255,6 +255,14 @@ namespace cloud.charging.open.EV.ISO15118
             if (evcc.Battery is { } battery && evcc.BatteryStop is { } stop)
                 Log.Notice(battery.Describe(stop), "15118", "session");
 
+            // EVSENotification StopCharging, -2's Terminate - see RunIso20Async.
+            if (evcc.TerminatedByStation)
+                Log.Warning("Session: the station told the vehicle to end the charging (EVSENotification StopCharging) - " +
+                            (Options.Pause
+                                 ? "terminated rather than paused, so there is no session to rejoin."
+                                 : "terminated."),
+                            "15118", "session");
+
             if (evcc.Tariff is { } tariff)
                 Log.Info($"Tariff: {tariff.TuplesOffered} tuple(s), signature " +
                          (tariff.SignaturePresent
@@ -275,7 +283,8 @@ namespace cloud.charging.open.EV.ISO15118
                            new JProperty("authorization",     evcc.AuthorizationMode),
                            new JProperty("meteringReceipts",  evcc.MeteringReceiptsSent),
                            new JProperty("renegotiations",    evcc.Renegotiations),
-                           new JProperty("paused",            Options.Pause),
+                           new JProperty("paused",            Options.Pause && !evcc.TerminatedByStation),
+                           new JProperty("terminatedByStation", evcc.TerminatedByStation),
                            new JProperty("battery",           BatteryJSON(evcc.Battery, evcc.BatteryStop)),
                            new JProperty("tariff",            evcc.Tariff is null
                                                                   ? null
@@ -291,10 +300,13 @@ namespace cloud.charging.open.EV.ISO15118
             // resume - both by design there, and both changed in -20. So the
             // handle carries the identification and the meter reading, and the
             // two -20 fields stay empty.
+            // Ended by the station, there is nothing to rejoin.
             return new SessionResult(
                        json,
-                       new ResumableSession(evcc.SessionId, null, 0,
-                                            (Options.Resume?.DeliveredWh ?? 0) + evcc.Meter.Energy)
+                       evcc.TerminatedByStation
+                           ? null
+                           : new ResumableSession(evcc.SessionId, null, 0,
+                                                  (Options.Resume?.DeliveredWh ?? 0) + evcc.Meter.Energy)
                    );
 
         }
