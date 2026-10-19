@@ -76,6 +76,30 @@ namespace cloud.charging.open.EV.Tests
 
         #endregion
 
+        #region (private) FreeUdpPort()
+
+        /// <summary>
+        /// A UDP port the operating system hands out, for a bus emulated over
+        /// multicast.
+        /// </summary>
+        /// <remarks>
+        /// Not TestPorts.Free(), which asks for a TCP port: Windows keeps
+        /// ranges of UDP ports for Hyper-V and WinNAT that a free TCP port may
+        /// fall into, and binding one of those is "access denied" - one test
+        /// run in three on a machine with Hyper-V. A port the system gives out
+        /// for UDP is never in them.
+        /// </remarks>
+        private static UInt16 FreeUdpPort()
+        {
+
+            using var probe = new System.Net.Sockets.UdpClient(new IPEndPoint(IPAddress.Any, 0));
+
+            return (UInt16) ((IPEndPoint) probe.Client.LocalEndPoint!).Port;
+
+        }
+
+        #endregion
+
 
         #region PluggedInDirectlyIsALinkWithNothingBeforeSDP()
 
@@ -154,7 +178,7 @@ namespace cloud.charging.open.EV.Tests
         {
 
             var vehicle  = (EV) Node;
-            var group    = new IPEndPoint(IPAddress.Parse("239.151.18.3"), TestPorts.Free());
+            var group    = new IPEndPoint(IPAddress.Parse("239.151.18.3"), FreeUdpPort());
 
             await using var medium      = new UdpMulticastT1STransport(T1SConstants.RandomLocalMac(), group);
             await using var coordinator = new PlcaCoordinator(medium, new PlcaCoordinatorOptions(
