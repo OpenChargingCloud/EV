@@ -51,7 +51,7 @@ namespace cloud.charging.open.EV.Tests
 
         #region Data
 
-        private const String  NoTimeServers  = """{ "nts": { "enabled": false } }""";
+        private const String  NoTimeServers  = """{ "nts": { "groups": { "legal": { "enabled": false } } } }""";
 
         private String  directory  = "";
         private EV?     vehicle;
@@ -368,7 +368,7 @@ namespace cloud.charging.open.EV.Tests
 
             await TestPorts.StartedOnFreshPorts(() => Vehicle("""
                                                               {
-                                                                "nts":   { "enabled": false },
+                                                                "nts":   { "groups": { "legal": { "enabled": false } } },
                                                                 "roles": { "support": [ "dns:read" ] }
                                                               }
                                                               """));

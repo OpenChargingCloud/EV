@@ -63,7 +63,7 @@ namespace cloud.charging.open.EV.Tests
             Directory.CreateDirectory(directory);
 
             var file   = Path.Combine(directory, WWCPConfigFile.DefaultFileName);
-            File.WriteAllText(file, """{ "nts": { "enabled": false } }""");
+            File.WriteAllText(file, """{ "nts": { "groups": { "legal": { "enabled": false } } } }""");
 
             vehicle    = await TestPorts.StartedOnFreshPorts(() => new EV(
                              HTTPPort:          IPPort.Parse(TestPorts.Free()),

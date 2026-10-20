@@ -311,9 +311,11 @@ asking a time server measures the clock and never steps it. The NTS page shows
 the clock as well, and what counts as legal time - who stands behind it, and
 how far off and how old a check may be - with a form of its own. It has a tab
 for every group of time servers, the legal one first, and a "+" tab that makes
-another one, switched off; the file keeps them under `nts.groups`, and a flat
-`nts` section of an older file is moved to `nts.groups.legal` when it is next
-saved.
+another one, switched off; the file keeps them under `nts.groups`, the legal
+one as `nts.groups.legal`. An `nts` section that says anything outside of
+`groups` - written flat, as files were before there were groups - is refused
+at the start, naming the keys and where they belong; `"nts": { }`, or no
+section, is the legal group of the PTB's four servers.
 
 A time server, and a name server asked over TLS or HTTPS, can be held to a
 certificate or a root, and the pages are where that is said: a server's dialog
