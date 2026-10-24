@@ -226,8 +226,11 @@ shows every account's keys and who is signed in over SSH right now. Their own
 keys the driver looks after all the same, as everybody signed in does: the
 name at the foot of the menu opens the account's own page (`/account`) - its
 details, its API keys and its SSH keys, made, switched off and on, and
-removed - which needs no role, and shows nobody's account but their own. The
-configuration file may add roles and say differently what
+removed - which needs no role, and shows nobody's account but their own. A
+key made there reads, unless it is made to read and write, and a key that
+reads is refused everything else with a 403, whatever its account's roles
+allow: one handed to a monitoring job changes nothing, not even an
+administrator's. The configuration file may add roles and say differently what
 one of them may do - see
 [WWCP_Node's README](https://github.com/OpenChargingCloud/WWCP_Node#who-may-sign-in).
 
