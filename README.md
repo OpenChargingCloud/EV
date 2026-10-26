@@ -230,9 +230,13 @@ removed - which needs no role, and shows nobody's account but their own. A
 key made there reads, unless it is made to read and write, and a key that
 reads is refused everything else with a 403, whatever its account's roles
 allow: one handed to a monitoring job changes nothing, not even an
-administrator's. The configuration file may add roles and say differently what
-one of them may do - see
-[WWCP_Node's README](https://github.com/OpenChargingCloud/WWCP_Node#who-may-sign-in).
+administrator's. Bound to addresses - "Only from" on the page, `from` after
+`apiKeys add` over SSH - a key opens the door only from them, and behind a
+reverse proxy the client is the one the configuration file's `web` section
+believes the proxy about. The configuration file may also add roles and say
+differently what one of them may do - see
+[WWCP_Node's README](https://github.com/OpenChargingCloud/WWCP_Node#who-may-sign-in)
+for both.
 
 The pages follow the vehicle on `/api/v1/events`, and that stream asks, before
 every event it sends and at every heartbeat, whether whoever opened it would
