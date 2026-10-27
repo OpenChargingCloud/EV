@@ -238,6 +238,18 @@ differently what one of them may do - see
 [WWCP_Node's README](https://github.com/OpenChargingCloud/WWCP_Node#who-may-sign-in)
 for both.
 
+The sign-in's password, every API key and the session cookie travel with every
+request, and with `--any` over plain HTTP they cross the network in the clear;
+the vehicle then says so in its log, below its banner and above every page to
+its administrators. The configuration file's `web` section is the way out:
+HTTPS of the vehicle's own - with the store's TLS server identity, or
+certbot's PEM files, read again when they change - with HSTS and a port that
+redirects to it, or the reverse proxies in front that do the HTTPS and are
+believed when they say so. `--https`, `--https-cert <file>` with `--https-key
+<file>`, `--redirect-port <number>` and `--trusted-proxy <address>` say the
+same and win over the file - see
+[WWCP_Node's README](https://github.com/OpenChargingCloud/WWCP_Node#https-and-the-proxies-in-front).
+
 The pages follow the vehicle on `/api/v1/events`, and that stream asks, before
 every event it sends and at every heartbeat, whether whoever opened it would
 still be let in. Once the session it was opened with has ended - signed out,
@@ -283,8 +295,11 @@ a private key: the roots, the server certificates and the tariff certificate.
 **Identities** has who the vehicle is, each with its private key: the Vehicle,
 contract and OEM provisioning certificates and a TLS identity - and there a
 session's credentials are marked chosen. A vehicle keeps no TLS server
-identity, the third page every node may have: it serves no TLS, and a kind it
-kept would be a page nothing uses.
+identity, the third page every node may have: its sessions serve no TLS, and a
+kind it kept would be a page nothing uses. Unless its web interface is served
+over HTTPS with one from the store - `"web": { "tls": { "certificate":
+"store" } }` in the configuration file, or `--https` - and then it keeps them
+all the same, and `--import-certificate tlsServerIdentity=<file>` puts one in.
 
 A TLS root and a server certificate are told what they are for: the time
 servers (`nts`), the name servers (`dns`), or - with nothing said - every use.

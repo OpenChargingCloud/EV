@@ -211,6 +211,7 @@ namespace cloud.charging.open.EV
         /// <param name="BridgeDebugLog">Whether what the libraries below write with DebugX is picked up.</param>
         /// <param name="TimeProvider">The clock, or null for the system one.</param>
         /// <param name="SSH">What the program says about serving the command line over SSH; nothing by default - see SSHSettings.</param>
+        /// <param name="Web">What the program says of HTTPS and of the reverse proxies in front - --https, --https-cert, --redirect-port and --trusted-proxy - over the "web" section of the configuration file; nothing by default, and then the file alone says it.</param>
         public EV(IIPAddress?            HTTPHostname       = null,
                   IPPort?                HTTPPort           = null,
                   HTTPServer?            HTTPServer         = null,
@@ -229,7 +230,8 @@ namespace cloud.charging.open.EV
                   String?                LogPath            = null,
                   Boolean                BridgeDebugLog     = true,
                   TimeProvider?          TimeProvider       = null,
-                  SSHSettings?           SSH                = null)
+                  SSHSettings?           SSH                = null,
+                  WebConfiguration?      Web                = null)
 
             : base(Kind:               EVKind,
                    Version:            typeof(EV).Assembly.GetName().Version?.ToString(3) ?? "0.0.0",
@@ -247,8 +249,11 @@ namespace cloud.charging.open.EV
                    NTSClient:          NTSClient,
                    Frontend:           Frontend ?? new EmbeddedContentSource(HTTPRoot, typeof(EV).Assembly),
                    CertificatesPath:   CertificatesPath,
-                   // Every kind but who a server of it is: a vehicle serves no
-                   // TLS, and a kind it kept would be a page nothing uses.
+                   // Every kind but who a server of it is: a vehicle's sessions
+                   // serve no TLS, and a kind it kept would be a page nothing
+                   // uses. Its web interface may - "web": { "tls": { "certificate":
+                   // "store" } }, or --https - and the node below keeps that kind
+                   // then all the same.
                    CertificateKinds:   CertificateKindExtensions.All.Where(kind => kind != CertificateKind.TLSServerIdentity),
                    Log:                Log,
                    LogToConsole:       LogToConsole,
@@ -256,7 +261,8 @@ namespace cloud.charging.open.EV
                    LogPath:            LogPath,
                    BridgeDebugLog:     BridgeDebugLog,
                    TimeProvider:       TimeProvider,
-                   SSH:                SSH)
+                   SSH:                SSH,
+                   Web:                Web)
 
         {
 
