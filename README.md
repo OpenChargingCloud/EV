@@ -299,7 +299,9 @@ identity, the third page every node may have: its sessions serve no TLS, and a
 kind it kept would be a page nothing uses. Unless its web interface is served
 over HTTPS with one from the store - `"web": { "tls": { "certificate":
 "store" } }` in the configuration file, or `--https` - and then it keeps them
-all the same, and `--import-certificate tlsServerIdentity=<file>` puts one in.
+all the same, on a page **Server identities** the menu then offers, and
+`--import-certificate tlsServerIdentity=<file>` puts one in with `--https` on
+the same command line.
 
 A TLS root and a server certificate are told what they are for: the time
 servers (`nts`), the name servers (`dns`), or - with nothing said - every use.

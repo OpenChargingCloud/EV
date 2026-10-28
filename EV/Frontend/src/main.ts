@@ -39,6 +39,9 @@ startNode({
             { path: '/configuration/v2g',      label: 'ISO 15118',  icon: 'fa-tower-broadcast',  permission: [ 'v2g:read' ]     },
             nodeMenu.certificates,
             nodeMenu.identities,
+            // Only where the store keeps a server identity: a web interface
+            // served over HTTPS from it - as "me" says, by WWCP_Node.
+            nodeMenu.serverIdentities,
             { path: '/configuration/session',  label: 'Charging Session',  icon: 'fa-bolt',  permission: [ 'session:read' ] }
         ]),
         nodeMenu.logs
