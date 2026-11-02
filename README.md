@@ -48,8 +48,8 @@ is changed. `EVTests/VehicleConformance.Configuration.cs` asks it of `vehicle`,
 
 `EV.csproj` runs `npm run build` in `Frontend/` and embeds `Frontend/dist` as
 manifest resources named `cloud.charging.open.EV.HTTPRoot.*`, which is what
-Hermod's `EmbeddedContentSource` reads. So a build needs Node.js, and a
-deployment needs nothing but the DLL.
+Hermod's `EmbeddedContentSource` reads. So a build needs Node.js 22.15 or
+newer, and a deployment needs nothing but the DLL.
 
 Not everything in that bundle is the vehicle's. What the web interface of every
 kind of node shares - the frame with its menu, the sign-in, the Logs, DNS
