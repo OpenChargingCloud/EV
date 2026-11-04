@@ -238,6 +238,14 @@ differently what one of them may do - see
 [WWCP_Node's README](https://github.com/OpenChargingCloud/WWCP_Node#who-may-sign-in)
 for both.
 
+The vehicle serves files over SFTP, on its SSH server, where the configuration
+file says `"ssh": { "enabled": true, "sftp": true }` or the SSH server page
+switches it on, and only then: its log files under `/logs`, and under
+`/logs/metrological` the metrological log without its private key, to whoever
+may read the Logs page. Nobody writes there, the administrators included, and
+the vehicle adds no folder of its own - see
+[WWCP_Node's README](https://github.com/OpenChargingCloud/WWCP_Node#files-over-sftp).
+
 The sign-in's password, every API key and the session cookie travel with every
 request, and with `--any` over plain HTTP they cross the network in the clear;
 the vehicle then says so in its log, below its banner and above every page to

@@ -37,15 +37,29 @@ namespace cloud.charging.open.EV.Tests
     /// <remarks>
     /// The sign-in, the configuration, name resolution and the time servers,
     /// the diagnostics, the log and its event stream, stopping with browsers
-    /// watching, the certificate store and the web interface. This suite had
-    /// copies of the event stream's tests and of the learned pins, and none
-    /// of the rest.
+    /// watching, the certificate store, the web interface and the files
+    /// over SFTP. This suite had copies of the event stream's tests and of
+    /// the learned pins, and none of the rest.
     /// </remarks>
     public partial class VehicleConformance : NodeConformanceTests
     {
 
         protected override WWCPNode NewNode(String   Directory,
                                             JObject  Configuration)
+
+            => New(Directory, Configuration, LogPath: null);
+
+        // The SFTP cases that read /logs, which a vehicle writing no log
+        // files would leave inconclusive.
+        protected override WWCPNode NewNodeWritingLogFiles(String   Directory,
+                                                           JObject  Configuration,
+                                                           String   LogPath)
+
+            => New(Directory, Configuration, LogPath);
+
+        private static EV New(String   Directory,
+                              JObject  Configuration,
+                              String?  LogPath)
         {
 
             var file = Path.Combine(Directory, WWCPConfigFile.DefaultFileName);
@@ -58,6 +72,7 @@ namespace cloud.charging.open.EV.Tests
                        ConfigFile:        new WWCPConfigFile(file),
                        CertificatesPath:  Path.Combine(Directory, "certificates"),
                        LogToConsole:      false,
+                       LogPath:           LogPath,
                        BridgeDebugLog:    false
                    );
 
