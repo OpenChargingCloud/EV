@@ -226,7 +226,7 @@ namespace cloud.charging.open.EV.Tests
 
             Assert.Multiple(() => {
                 Assert.That(ev.Roles,             Is.EqualTo(new[] { "viewer", "driver", "service", WWCPNode.AdminRole }));
-                Assert.That(ev.Access.Resources,  Is.EqualTo(new[] { "configuration", "dns", "nts", "certificates", "ssh", "vehicle", "v2g", "session" }));
+                Assert.That(ev.Access.Resources,  Is.EqualTo(new[] { "configuration", "dns", "nts", "certificates", "ssh", "log", "vehicle", "v2g", "session" }));
             });
 
         }
