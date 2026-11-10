@@ -17,6 +17,8 @@
 
 #region Usings
 
+using org.GraphDefined.Vanaheimr.Hermod.DNS;
+
 using cloud.charging.open.protocols.ISO15118.Security;
 using cloud.charging.open.protocols.ISO15118.SharedCC;
 using cloud.charging.open.protocols.ISO15118.Session;
@@ -54,6 +56,13 @@ namespace cloud.charging.open.EV.ISO15118
 
         /// <summary>The station's TCP port.</summary>
         public required Int32                 Port                 { get; init; }
+
+        /// <summary>
+        /// What a station named by a host name is looked up with: the vehicle's own DNS client, never
+        /// the resolver of the operating system. Without one, a host name is refused, and an address
+        /// is connected to as it is.
+        /// </summary>
+        public IDNSClient?                    DNSClient            { get; init; }
 
         #endregion
 

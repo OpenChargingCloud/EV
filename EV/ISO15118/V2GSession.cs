@@ -506,7 +506,7 @@ namespace cloud.charging.open.EV.ISO15118
                                  ValidatePeerChain = chain => Report("TLS station", Trust.Validate(chain[0], chain[1..]), Log)
                              };
 
-                    return await TcpV2GClient.ConnectAsync(Options.Host, Options.Port, bc, CancellationToken);
+                    return await TcpV2GClient.ConnectAsync(Options.Host, Options.Port, bc, Options.DNSClient, CancellationToken);
 
                 }
 
@@ -555,14 +555,14 @@ namespace cloud.charging.open.EV.ISO15118
 
                               };
 
-                    return await TcpV2GClient.ConnectAsync(Options.Host, Options.Port, tls, CancellationToken);
+                    return await TcpV2GClient.ConnectAsync(Options.Host, Options.Port, tls, Options.DNSClient, CancellationToken);
 
                 }
 
                 #endregion
 
                 default:
-                    return await TcpV2GClient.ConnectAsync(Options.Host, Options.Port, ct: CancellationToken);
+                    return await TcpV2GClient.ConnectAsync(Options.Host, Options.Port, dnsClient: Options.DNSClient, ct: CancellationToken);
 
             }
 

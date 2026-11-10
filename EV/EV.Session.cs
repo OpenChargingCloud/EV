@@ -629,6 +629,7 @@ namespace cloud.charging.open.EV
 
                        Host                 = Station.Host,
                        Port                 = Station.Port,
+                       DNSClient            = DNSClient,
 
                        Protocol             = settings.Protocol  ?? ProtocolVariant.Iso15118_20,
                        OfferBoth            = settings.OfferBoth ?? true,
