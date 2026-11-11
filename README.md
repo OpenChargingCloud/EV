@@ -6,9 +6,9 @@ through.
 
 This is the library. The program that starts it is
 [EVCLI](https://github.com/OpenChargingCloud/EVCLI), and the split is the same
-one the charging station makes: the command line - the switches it is started
-with, and the commands it can be typed at while it runs - belongs to whoever
-starts the thing; everything a vehicle *is* lives here.
+one the charging station makes: the switches a vehicle is started with belong
+to whoever starts it; everything a vehicle *is* lives here, the commands it can
+be typed at while it runs among them.
 
 
 ## What is in it
@@ -25,6 +25,7 @@ starts the thing; everything a vehicle *is* lives here.
 | `ISO15118/V2GSession.cs` | one session, from the TCP connection to `SessionStop` |
 | `ISO15118/VehicleCredentials.cs` | the credentials a session was given, turned into the shapes it needs - and checked against the roots this vehicle believes |
 | `Configuration/` | one record per section of the configuration file that is the vehicle's: `vehicle`, `v2g`, `session` |
+| `CommandLine/` | what can be typed at the running vehicle, at the console and over SSH: `VehicleCLI`, and one file per command beside the node's - `discover` |
 | `Frontend/` | the web interface: TypeScript and SCSS, bundled by webpack and embedded into the assembly |
 
 Everything a running vehicle is before it is a vehicle - its log, its
@@ -246,6 +247,13 @@ under `/logs`, and under `/logs/metrological` the metrological log without its
 private key, to whoever may read the Logs page. Nobody writes there, the
 administrators included, and the vehicle adds no folder of its own - see
 [WWCP_Node's README](https://github.com/OpenChargingCloud/WWCP_Node#files-over-sftp).
+
+The command line itself - at the console and over SSH - is this library's:
+`VehicleCLI` and the commands beside it in `CommandLine/`, among them
+`discover`, which looks for a station as the ISO 15118 page's button does. The
+vehicle makes it for every session over SSH, so every program that runs a
+vehicle offers the same commands; a new one is a new file there, tested in
+`EVTests/VehicleCLITests.cs`.
 
 The sign-in's password, every API key and the session cookie travel with every
 request, and with `--any` over plain HTTP they cross the network in the clear;

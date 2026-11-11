@@ -29,6 +29,7 @@ using org.GraphDefined.Vanaheimr.Norn.NTS;
 using cloud.charging.open.protocols.ISO15118.Discovery;
 
 using cloud.charging.open.EV.Configuration;
+using cloud.charging.open.EV.CommandLine;
 using cloud.charging.open.EV.ISO15118;
 
 using cloud.charging.open.protocols.WWCP.Node;
@@ -318,6 +319,16 @@ namespace cloud.charging.open.EV
                                      APIPath:     this.HTTPRootPath,
                                      Version:     Version
                                  );
+
+            #endregion
+
+            #region What somebody signed in over SSH gets
+
+            // A vehicle's command line, with discover beside the node's
+            // commands - whichever program runs this vehicle, and not only
+            // EVCLI. Before the node starts, as the node asks; a program with a
+            // command line of its own sets another after this.
+            CommandLines = (terminal, caller) => new VehicleCLI(this, terminal, caller);
 
             #endregion
 
