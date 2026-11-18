@@ -206,20 +206,23 @@ says it has started, and the session resource carries the result when it ends.
 
 ## Who may do what
 
-Four roles, when the configuration file says nothing else, and what each may
+Five roles, when the configuration file says nothing else, and what each may
 do is an operation - `read`, `edit` or `run` - on a resource: the node's
-`configuration`, `dns`, `nts`, `certificates` and `ssh`, and the vehicle's
-`vehicle`, `v2g` and `session`.
+`configuration`, `dns`, `nts`, `certificates`, `ssh` and `log`, the six every
+node has for signed messages - `node`, `reset`, `reset-immediate`, `state`,
+`firmware` and `signatures` - and the vehicle's `vehicle`, `v2g` and `session`.
 
 | Role | may |
 |---|---|
 | `viewer` | read everything |
-| `driver` | read everything but the SSH server; ask a name server, a time server or the link something; change what the battery wants and what a session asks for; charge |
-| `service` | everything the driver may, read the SSH server, and change where the vehicle resolves names, reads the time and finds a station |
+| `support` | see what is going on, have it reported again, and restart the vehicle once it is idle |
+| `driver` | read the configuration, the name and time servers, the certificates and what is the vehicle's own - not the SSH server; ask a name server, a time server or the link something; change what the battery wants and what a session asks for; charge |
+| `service` | read everything, and do everything the driver may; change where the vehicle resolves names, reads the time and finds a station |
 | `systemadmin` | everything, the certificates included |
 
-`viewer` and `systemadmin` are the node's, the other two are in
-`VehicleAccess.cs`. The certificates are a resource nobody but the
+`viewer`, `support` and `systemadmin` are the node's, the other two are in
+`VehicleAccess.cs`. The driver's are named one by one, so a resource a newer
+node brings is the driver's to read only once `VehicleAccess.cs` says so. The certificates are a resource nobody but the
 administrators may edit, which includes choosing the ones a session uses:
 somebody who can add a root can make this vehicle believe a station nobody
 else would. So is the SSH server, which the driver may not even read: its page

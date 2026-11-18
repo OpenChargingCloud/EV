@@ -168,8 +168,8 @@ namespace cloud.charging.open.EV.Tests
                             "a vehicle names no listener an identity could be told of, so a page offers it nothing - not the services a root vouches for");
 
                 Assert.That(store["trustAnchors"]!.Values<String>(),                          Does.Contain("tlsRoot").And.Contain("v2gRoot"));
-                Assert.That(store["recognised"]!.Values<String>(),                            Is.EqualTo(new[] { "tlsServer" }),
-                            "a server certificate is recognised, neither believed nor presented");
+                Assert.That(store["recognised"]!.Values<String>(),                            Is.EqualTo(new[] { "tlsServer", "tlsIntermediate" }),
+                            "a server certificate and an issuing CA kept to build chains with are recognised, neither believed nor presented");
                 Assert.That(store["credentials"]!.Values<String>(),                           Does.Not.Contain("tlsServer").And.Contain("tlsIdentity"));
 
             });

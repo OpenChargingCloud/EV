@@ -211,22 +211,26 @@ namespace cloud.charging.open.EV.Tests
         #endregion
 
 
-        #region AVehicleKnowsItsResourcesAndItsFourRoles()
+        #region AVehicleKnowsItsResourcesAndItsFiveRoles()
 
         /// <summary>
-        /// The node brings the viewer and the administrators, and the vehicle
-        /// its driver and its service - which the node used to bring for every
-        /// kind of node, and brings for none now.
+        /// The node brings the viewer, the support and the administrators, and
+        /// the vehicle its driver and its service - which the node used to bring
+        /// for every kind of node, and brings for none now. The resources are
+        /// the node's - among them the six of the signed messages - and then
+        /// the vehicle's three.
         /// </summary>
         [Test]
-        public void AVehicleKnowsItsResourcesAndItsFourRoles()
+        public void AVehicleKnowsItsResourcesAndItsFiveRoles()
         {
 
             var ev = Vehicle();
 
             Assert.Multiple(() => {
-                Assert.That(ev.Roles,             Is.EqualTo(new[] { "viewer", "driver", "service", WWCPNode.AdminRole }));
-                Assert.That(ev.Access.Resources,  Is.EqualTo(new[] { "configuration", "dns", "nts", "certificates", "ssh", "log", "vehicle", "v2g", "session" }));
+                Assert.That(ev.Roles,             Is.EqualTo(new[] { "viewer", "support", "driver", "service", WWCPNode.AdminRole }));
+                Assert.That(ev.Access.Resources,  Is.EqualTo(new[] { "configuration", "dns", "nts", "certificates", "ssh", "log",
+                                                                     "node", "reset", "reset-immediate", "state", "firmware", "signatures",
+                                                                     "vehicle", "v2g", "session" }));
             });
 
         }
@@ -369,18 +373,18 @@ namespace cloud.charging.open.EV.Tests
             await TestPorts.StartedOnFreshPorts(() => Vehicle("""
                                                               {
                                                                 "nts":   { "groups": { "legal": { "enabled": false } } },
-                                                                "roles": { "support": [ "dns:read" ] }
+                                                                "roles": { "auditor": [ "dns:read" ] }
                                                               }
                                                               """));
 
-            using var support  = await SignedInAs("supporter", "support");
+            using var auditor  = await SignedInAs("auditor1", "auditor");
 
-            var dns            = await support.GetAsync("api/v1/configuration/dns");
-            var nts            = await support.GetAsync("api/v1/configuration/nts");
+            var dns            = await auditor.GetAsync("api/v1/configuration/dns");
+            var nts            = await auditor.GetAsync("api/v1/configuration/nts");
             var refusal        = await nts.Content.ReadAsStringAsync();
 
             Assert.Multiple(() => {
-                Assert.That(vehicle!.Roles,    Is.EqualTo(new[] { "viewer", "driver", "service", "support", WWCPNode.AdminRole }));
+                Assert.That(vehicle!.Roles,    Is.EqualTo(new[] { "viewer", "support", "driver", "service", "auditor", WWCPNode.AdminRole }));
                 Assert.That(dns.StatusCode,    Is.EqualTo(HttpStatusCode.OK));
                 Assert.That(nts.StatusCode,    Is.EqualTo(HttpStatusCode.Forbidden));
                 Assert.That(refusal,           Does.Contain("This needs the viewer or driver or service or systemadmin role."),
