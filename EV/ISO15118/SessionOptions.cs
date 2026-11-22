@@ -17,6 +17,7 @@
 
 #region Usings
 
+using org.GraphDefined.Vanaheimr.Hermod;
 using org.GraphDefined.Vanaheimr.Hermod.DNS;
 
 using cloud.charging.open.protocols.ISO15118.Security;
@@ -55,7 +56,7 @@ namespace cloud.charging.open.EV.ISO15118
         public required String                Host                 { get; init; }
 
         /// <summary>The station's TCP port.</summary>
-        public required Int32                 Port                 { get; init; }
+        public required IPPort                 Port                 { get; init; }
 
         /// <summary>
         /// What a station named by a host name is looked up with: the vehicle's own DNS client, never

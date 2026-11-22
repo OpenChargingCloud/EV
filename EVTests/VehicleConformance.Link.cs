@@ -35,6 +35,7 @@ using cloud.charging.open.protocols.ISO15118.Transport;
 using cloud.charging.open.protocols.WWCP.Node.TestKit;
 
 using cloud.charging.open.EV.Configuration;
+using IPPort = org.GraphDefined.Vanaheimr.Hermod.IPPort;
 
 #endregion
 
@@ -89,12 +90,12 @@ namespace cloud.charging.open.EV.Tests
         /// run in three on a machine with Hyper-V. A port the system gives out
         /// for UDP is never in them.
         /// </remarks>
-        private static UInt16 FreeUdpPort()
+        private static IPPort FreeUdpPort()
         {
 
             using var probe = new System.Net.Sockets.UdpClient(new IPEndPoint(IPAddress.Any, 0));
 
-            return (UInt16) ((IPEndPoint) probe.Client.LocalEndPoint!).Port;
+            return IPPort.Parse((UInt16) ((IPEndPoint) probe.Client.LocalEndPoint!).Port);
 
         }
 
@@ -178,7 +179,7 @@ namespace cloud.charging.open.EV.Tests
         {
 
             var vehicle  = (EV) Node;
-            var group    = new IPEndPoint(IPAddress.Parse("239.151.18.3"), FreeUdpPort());
+            var group    = new IPEndPoint(IPAddress.Parse("239.151.18.3"), (FreeUdpPort()).ToInt32());
 
             await using var medium      = new UdpMulticastT1STransport(T1SConstants.RandomLocalMac(), group);
             await using var coordinator = new PlcaCoordinator(medium, new PlcaCoordinatorOptions(

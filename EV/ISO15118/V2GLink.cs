@@ -40,6 +40,7 @@ using cloud.charging.open.EV.Configuration;
 // one every line below means.
 using Stopwatch = System.Diagnostics.Stopwatch;
 using cloud.charging.open.protocols.WWCP.Node.Logging;
+using IPPort = org.GraphDefined.Vanaheimr.Hermod.IPPort;
 
 #endregion
 
@@ -828,7 +829,7 @@ namespace cloud.charging.open.EV.ISO15118
         /// </remarks>
         public static String Scoped(V2GNetworkInterface Interface)
 
-            => Interface.LinkLocalEndpoint(0).Address.ToString();
+            => Interface.LinkLocalEndpoint(IPPort.Zero).Address.ToString();
 
         #endregion
 
@@ -874,7 +875,7 @@ namespace cloud.charging.open.EV.ISO15118
 
             => new (
                    new JProperty("address",    Response.SeccIPAddress.ToString()),
-                   new JProperty("port",       Response.SeccPort),
+                   new JProperty("port",       Response.SeccPort.ToUInt16()),
                    new JProperty("security",   Response.Security          == SDP_Security.TLS ? "tls" : "noTls"),
                    new JProperty("transport",  Response.TransportProtocol == SDP_TransportProtocol.TCP ? "tcp" : Response.TransportProtocol.ToString()),
                    new JProperty("version",    Response.Version.ToString()),

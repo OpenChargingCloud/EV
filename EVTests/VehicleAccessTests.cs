@@ -111,7 +111,7 @@ namespace cloud.charging.open.EV.Tests
             File.WriteAllText(file, Configuration);
 
             vehicle    = new EV(
-                             HTTPPort:          IPPort.Parse(port),
+                             HTTPPort:          port,
                              AccountsPath:      Path.Combine(directory, "accounts"),
                              ConfigFile:        new WWCPConfigFile(file),
                              CertificatesPath:  Path.Combine(directory, "certificates"),
@@ -134,7 +134,7 @@ namespace cloud.charging.open.EV.Tests
         /// made for the purpose and put in the group of the given role - made
         /// the way the vehicle makes its first one, so that it may sign in.
         /// </summary>
-        private async Task<HttpClient> SignedInAs(String  Name,
+        private async Task<HttpClient> SignedInAs(User_Id Name,
                                                   String  Role)
         {
 
@@ -144,8 +144,8 @@ namespace cloud.charging.open.EV.Tests
                         organization is Organization, Is.True, "the vehicle's organization is not there");
 
             var account = await vehicle.ExtAPI.CreateUser(
-                                    User_Id.Parse(Name),
-                                    I18NString.Create(Languages.en, Name),
+                                    Name,
+                                    I18NString.Create(Languages.en, Name.ToString()),
                                     SimpleEMailAddress.Parse($"{Name}@localhost"),
                                     User2OrganizationEdgeLabel.IsMember,
                                     (Organization) organization!,
@@ -158,7 +158,7 @@ namespace cloud.charging.open.EV.Tests
                                 );
 
             Assert.That(account,                                                                  Is.Not.Null, $"the account '{Name}' was not made");
-            Assert.That(vehicle.ExtAPI.TryGetUser(User_Id.Parse(Name), out var stored),           Is.True);
+            Assert.That(vehicle.ExtAPI.TryGetUser(Name, out var stored),           Is.True);
             Assert.That(vehicle.ExtAPI.TryGetUserGroup(UserGroup_Id.Parse(Role), out var group),  Is.True, $"the vehicle has no group '{Role}'");
 
             var joined = await vehicle.ExtAPI.AddUserToUserGroup((User) stored!, User2UserGroupEdgeLabel.IsMember, (UserGroup) group!);
@@ -227,7 +227,7 @@ namespace cloud.charging.open.EV.Tests
             var ev = Vehicle();
 
             Assert.Multiple(() => {
-                Assert.That(ev.Roles,             Is.EqualTo(new[] { "viewer", "support", "driver", "service", WWCPNode.AdminRole }));
+                Assert.That(ev.Roles,             Is.EqualTo(new[] { "viewer", "support", "driver", "service", WWCPNode.AdminRole.ToString() }));
                 Assert.That(ev.Access.Resources,  Is.EqualTo(new[] { "configuration", "dns", "nts", "certificates", "ssh", "log",
                                                                      "node", "reset", "reset-immediate", "state", "firmware", "signatures",
                                                                      "vehicle", "v2g", "session" }));
@@ -306,7 +306,7 @@ namespace cloud.charging.open.EV.Tests
 
             await TestPorts.StartedOnFreshPorts(() => Vehicle());
 
-            using var driver  = await SignedInAs("driver1", "driver");
+            using var driver  = await SignedInAs(User_Id.Parse("driver1"), "driver");
 
             var looked        = await driver.GetAsync("api/v1/configuration/dns");
             var changed       = await Put(driver, "api/v1/configuration/dns", "{}");
@@ -342,8 +342,8 @@ namespace cloud.charging.open.EV.Tests
 
             await TestPorts.StartedOnFreshPorts(() => Vehicle());
 
-            using var driver   = await SignedInAs("driver1",  "driver");
-            using var service  = await SignedInAs("service1", "service");
+            using var driver   = await SignedInAs(User_Id.Parse("driver1"),  "driver");
+            using var service  = await SignedInAs(User_Id.Parse("service1"), "service");
 
             var byDriver       = await driver. GetAsync("api/v1/configuration/ssh");
             var byService      = await service.GetAsync("api/v1/configuration/ssh");
@@ -377,14 +377,14 @@ namespace cloud.charging.open.EV.Tests
                                                               }
                                                               """));
 
-            using var auditor  = await SignedInAs("auditor1", "auditor");
+            using var auditor  = await SignedInAs(User_Id.Parse("auditor1"), "auditor");
 
             var dns            = await auditor.GetAsync("api/v1/configuration/dns");
             var nts            = await auditor.GetAsync("api/v1/configuration/nts");
             var refusal        = await nts.Content.ReadAsStringAsync();
 
             Assert.Multiple(() => {
-                Assert.That(vehicle!.Roles,    Is.EqualTo(new[] { "viewer", "support", "driver", "service", "auditor", WWCPNode.AdminRole }));
+                Assert.That(vehicle!.Roles,    Is.EqualTo(new[] { "viewer", "support", "driver", "service", "auditor", WWCPNode.AdminRole.ToString() }));
                 Assert.That(dns.StatusCode,    Is.EqualTo(HttpStatusCode.OK));
                 Assert.That(nts.StatusCode,    Is.EqualTo(HttpStatusCode.Forbidden));
                 Assert.That(refusal,           Does.Contain("This needs the viewer or driver or service or systemadmin role."),

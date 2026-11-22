@@ -213,7 +213,7 @@ namespace cloud.charging.open.EV
         /// <param name="TimeProvider">The clock, or null for the system one.</param>
         /// <param name="SSH">What the program says about serving the command line over SSH; nothing by default - see SSHSettings.</param>
         /// <param name="Web">What the program says of HTTPS and of the reverse proxies in front - --https, --https-cert, --redirect-port and --trusted-proxy - over the "web" section of the configuration file; nothing by default, and then the file alone says it.</param>
-        public EV(IIPAddress?            HTTPHostname       = null,
+        public EV(IPAddress?            HTTPHostname       = null,
                   IPPort?                HTTPPort           = null,
                   HTTPServer?            HTTPServer         = null,
                   HTTPPath?              BasePath           = null,

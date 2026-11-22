@@ -134,7 +134,7 @@ namespace cloud.charging.open.EV.Tests
                 File.WriteAllText(file, """{ "nts": { "groups": { "legal": { "enabled": false } } } }""");
 
                 return new FailingToStop(
-                           HTTPPort:          IPPort.Parse(TestPorts.Free()),
+                           HTTPPort:          TestPorts.Free(),
                            AccountsPath:      Path.Combine(here, "accounts"),
                            ConfigFile:        new WWCPConfigFile(file),
                            CertificatesPath:  Path.Combine(here, "certificates"),

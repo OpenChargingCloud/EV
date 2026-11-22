@@ -189,7 +189,7 @@ namespace cloud.charging.open.EV.Tests
             log.OnLogged += entry => { lock (entries) { entries.Add(entry); } };
 
             vehicle = new EV(
-                          HTTPPort:          IPPort.Parse(TestPorts.Free()),
+                          HTTPPort:          TestPorts.Free(),
                           AccountsPath:      Path.Combine(directory, "accounts"),
                           ConfigFile:        new WWCPConfigFile(Path.Combine(directory, WWCPConfigFile.DefaultFileName)),
                           CertificatesPath:  Path.Combine(directory, "certificates"),
@@ -197,7 +197,7 @@ namespace cloud.charging.open.EV.Tests
                           LogToConsole:      false,
                           BridgeDebugLog:    false,
                           SSH:               SSH
-                                                 ? new SSHSettings(Enabled: true, Port: IPPort.Parse(TestPorts.Free()))
+                                                 ? new SSHSettings(Enabled: true, Port: TestPorts.Free())
                                                  : null
                       );
 
@@ -222,16 +222,16 @@ namespace cloud.charging.open.EV.Tests
         /// Sign in over SSH as the given account - made, in the given role,
         /// where it is not root - with a key of its own.
         /// </summary>
-        private async Task<SshClient> SignIn(String Account, String? Role = null)
+        private async Task<SSHClient> SignIn(User_Id Account, String? Role = null)
         {
 
             if (Account != WWCPNode.DefaultAdminUser)
             {
 
-                await vehicle!.ExtAPI.AddUser(new User(User_Id.Parse(Account), I18NString.Create(Languages.en, Account), SimpleEMailAddress.Parse($"{Account}@localhost")),
+                await vehicle!.ExtAPI.AddUser(new User(Account, I18NString.Create(Languages.en, Account.ToString()), SimpleEMailAddress.Parse($"{Account}@localhost")),
                                               SkipDefaultNotifications: true, SkipNewUserEMail: true, SkipNewUserNotifications: true);
 
-                vehicle.ExtAPI.TryGetUser(User_Id.Parse(Account), out var stored);
+                vehicle.ExtAPI.TryGetUser(Account, out var stored);
                 vehicle.ExtAPI.TryGetUserGroup(UserGroup_Id.Parse(Role!), out var group);
 
                 await vehicle.ExtAPI.AddUserToUserGroup((User) stored!, User2UserGroupEdgeLabel.IsMember, (UserGroup) group!);
@@ -243,9 +243,9 @@ namespace cloud.charging.open.EV.Tests
 
             Assert.That(added.IsAdded, Is.True, added.Reason);
 
-            return await SshClient.ConnectAsync("127.0.0.1",
-                                                vehicle.SSHPort!.Value.ToUInt16(),
-                                                new SshClientOptions {
+            return await SSHClient.Connect("127.0.0.1",
+                                                vehicle.SSHPort!.Value,
+                                                new SSHClientOptions {
                                                     Username       = Account,
                                                     VerifyHostKey  = blob => vehicle.SSHHostKey == $"ssh-ed25519 {SshFingerprint.Sha256(blob)}",
                                                     Credentials    = [ key ]
@@ -253,9 +253,9 @@ namespace cloud.charging.open.EV.Tests
 
         }
 
-        private static async Task<(SshClientShell Shell, Screen Screen)> Open(SshClient Client)
+        private static async Task<(SshClientShell Shell, Screen Screen)> Open(SSHClient Client)
         {
-            var shell  = await Client.OpenShellAsync(Terminal);
+            var shell  = await Client.OpenShell(Terminal);
             var screen = new Screen(shell);
             return (shell, screen);
         }
@@ -352,7 +352,7 @@ namespace cloud.charging.open.EV.Tests
 
             var ev = await TestPorts.StartedOnFreshPorts(() => Vehicle(SSH: true));
 
-            await using var client  = await SignIn("driver1", VehicleAccess.Driver.Name);
+            await using var client  = await SignIn(User_Id.Parse("driver1"), VehicleAccess.Driver.Name);
             var (shell, screen)     = await Open(client);
 
             await screen.WaitFor($"{ev.VehicleName}> ");
@@ -390,7 +390,7 @@ namespace cloud.charging.open.EV.Tests
 
             var ev = await TestPorts.StartedOnFreshPorts(() => Vehicle(SSH: true));
 
-            await using var client  = await SignIn("aviewer", Role.Viewer.Name);
+            await using var client  = await SignIn(User_Id.Parse("aviewer"), Role.Viewer.Name);
             var (shell, screen)     = await Open(client);
 
             await screen.WaitFor($"{ev.VehicleName}> ");

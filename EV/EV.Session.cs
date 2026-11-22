@@ -211,7 +211,7 @@ namespace cloud.charging.open.EV
                     var endpoint = V2GEndpoint.Parse(peer, "'session.slacPeer'");
 
                     slac = await V2GLink.PairAsync(
-                               endpoint.IPEndPoint ?? new IPEndPoint(IPAddress.Parse(endpoint.ConnectHost), endpoint.Port),
+                               endpoint.IPEndPoint ?? new IPEndPoint(IPAddress.Parse(endpoint.ConnectHost), endpoint.Port.ToInt32()),
                                Log,
                                cancellation.Token
                            );
@@ -431,7 +431,7 @@ namespace cloud.charging.open.EV
             var endpoint = V2GEndpoint.Parse(peer, "'session.slacPeer'");
 
             return await V2GLink.PairAsync(
-                       endpoint.IPEndPoint ?? new IPEndPoint(IPAddress.Parse(endpoint.ConnectHost), endpoint.Port),
+                       endpoint.IPEndPoint ?? new IPEndPoint(IPAddress.Parse(endpoint.ConnectHost), endpoint.Port.ToInt32()),
                        Log,
                        CancellationToken
                    );
