@@ -1,5 +1,7 @@
 # EV
 
+![The EV charging test environment, the EV (EV) highlighted](docs/EVChargingTestEnvironment.svg)
+
 One simulated electric vehicle: what it is, what its battery wants, how it
 finds a charging station, and the web interface all of that is read and changed
 through.
