@@ -242,9 +242,26 @@ namespace cloud.charging.open.EV.ISO15118
                             "this vehicle implements it only for -20. Pin the protocol to \"20\" to use it.",
                             "15118", "pnc");
 
+            // -2 has no header timestamp: the meter's TMeter is the only clock
+            // of the station's this vehicle ever sees, and only with a reading.
+            evcc.OnStationReading = reading => {
+
+                if (evcc.MeterClock.Samples == 1 && evcc.StationReadings.Count == 1 && evcc.MeterClock.First is { } first)
+                    Transparency.SayFirstClockSample("meter", first, Log);
+
+                // The first reading, and after it only one whose difference moved:
+                // a session is hundreds of iterations, and a line for each that
+                // agrees would push everything else out of the log.
+                if (Transparency.IsNews(evcc.StationReadings, reading))
+                    Transparency.SayReading(reading, Log);
+
+            };
+
             await evcc.RunAsync(CancellationToken);
 
             #region What it added up to
+
+            Transparency.SaySummary(null, evcc.StationReadings, Log);
 
             Log.Notice($"Session: {evcc.Exchanges} exchanges, {evcc.BytesOnWire} bytes on the wire (request side), " +
                        $"auth {evcc.AuthorizationMode}, {evcc.MeteringReceiptsSent} metering receipt(s), " +
@@ -286,6 +303,7 @@ namespace cloud.charging.open.EV.ISO15118
                            new JProperty("paused",            Options.Pause && !evcc.TerminatedByStation),
                            new JProperty("terminatedByStation", evcc.TerminatedByStation),
                            new JProperty("battery",           BatteryJSON(evcc.Battery, evcc.BatteryStop)),
+                           new JProperty("transparency",      Transparency.JSON(null, evcc.MeterClock, evcc.StationReadings, evcc.Meter.Energy)),
                            new JProperty("tariff",            evcc.Tariff is null
                                                                   ? null
                                                                   : new JObject(
@@ -353,9 +371,36 @@ namespace cloud.charging.open.EV.ISO15118
             if (Options.TariffCertificate is not null)
                 evcc.TariffVerifyKey = VehicleCredentials.LoadTariffVerifyKey(Options.TariffCertificate, Log);
 
+            // [V2G20-1081]: the one way a vehicle can ask to be told the meter
+            // reading, and a vehicle that means to compare has to ask.
+            evcc.RequestMeterInfo = true;
+
+            // The station's clock is on the header of every response, so it is
+            // known after SessionSetupRes - before anything is authorised, which
+            // is when it is worth knowing. Said once; the drift comes at the end.
+            evcc.OnStationClock   = sample => {
+                if (evcc.StationClock.Samples == 1)
+                    Transparency.SayFirstClockSample("station", sample, Log);
+            };
+
+            evcc.OnStationReading = reading => {
+
+                if (evcc.MeterClock.Samples == 1 && evcc.StationReadings.Count == 1 && evcc.MeterClock.First is { } first)
+                    Transparency.SayFirstClockSample("meter", first, Log);
+
+                // The first reading, and after it only one whose difference moved:
+                // a session is hundreds of iterations, and a line for each that
+                // agrees would push everything else out of the log.
+                if (Transparency.IsNews(evcc.StationReadings, reading))
+                    Transparency.SayReading(reading, Log);
+
+            };
+
             await evcc.RunAsync(CancellationToken);
 
             #region What it added up to
+
+            Transparency.SaySummary(evcc.StationClock, evcc.StationReadings, Log);
 
             Log.Notice($"Session: {evcc.Exchanges} exchanges, {evcc.BytesOnWire} bytes on the wire (request side), " +
                        $"auth {evcc.AuthorizationMode}, session setup {evcc.SessionSetupCode}.",
@@ -457,6 +502,7 @@ namespace cloud.charging.open.EV.ISO15118
                            new JProperty("contractInstalled", evcc.InstalledContractCertificate is not null),
                            new JProperty("contractChainsTo",  installedChainsTo),
                            new JProperty("battery",           BatteryJSON(evcc.Battery, evcc.BatteryStop)),
+                           new JProperty("transparency",      Transparency.JSON(evcc.StationClock, evcc.MeterClock, evcc.StationReadings, evcc.Meter.Energy)),
                            new JProperty("tariff",            evcc.Tariff is null
                                                                   ? null
                                                                   : new JObject(

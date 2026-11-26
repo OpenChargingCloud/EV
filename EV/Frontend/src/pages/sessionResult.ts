@@ -1,4 +1,4 @@
-import type { SessionBattery, SessionRun } from '../api/client';
+import type { SessionBattery, SessionClock, SessionRun, SessionTransparency } from '../api/client';
 import { formatValue } from '@node/ui';
 import { html, nothing, type TemplateResult } from '@node/view';
 
@@ -29,6 +29,8 @@ export function sessionResult(run: SessionRun): TemplateResult {
             </div>
 
             ${run.battery ? html`<h3>Battery</h3>${battery(run.battery)}` : nothing}
+
+            ${run.transparency ? html`<h3>Transparency</h3>${transparency(run.transparency)}` : nothing}
 
             ${run.terminatedByStation
                   ? html`<p class="hint">The station told the vehicle to end the charging, so the session ended for good - not paused, whatever this run asked for, and with nothing to rejoin.</p>`
@@ -121,6 +123,87 @@ function battery(pack: SessionBattery): TemplateResult {
         ${pack.describe ? html`<p class="hint">${pack.describe}</p>` : nothing}
     `;
 
+}
+
+/**
+ * The station's clock and meter beside the vehicle's own.
+ *
+ * The clocks come first, because every later line leans on them. A reading is
+ * said to be signed or unsigned and never verified, because nothing verified
+ * it; and the two counts agreeing is said to be arithmetic, because in a
+ * simulator both come from one modelled charge loop.
+ */
+function transparency(seen: SessionTransparency): TemplateResult {
+
+    const last = seen.readings.at(-1);
+
+    return html`
+        <div class="kv-list">
+            <div class="kv">
+                <span class="k">Station clock</span>
+                <span class="v">${seen.stationClock ? clock(seen.stationClock, seen.clockTolerance_ms) : 'not on the wire - ISO 15118-2 has no header timestamp'}</span>
+            </div>
+            <div class="kv">
+                <span class="k">Meter clock</span>
+                <span class="v">${seen.meterClock ? clock(seen.meterClock, seen.clockTolerance_ms) : 'no reading carried a timestamp'}</span>
+            </div>
+            ${last
+                  ? html`
+                      <div class="kv">
+                          <span class="k">Station meter</span>
+                          <span class="v">
+                              ${last.stationWh} Wh at <code>${last.meterId}</code>,
+                              ${last.signed ? 'signed, not verified' : 'unsigned'}
+                          </span>
+                      </div>
+                      <div class="kv"><span class="k">This vehicle</span><span class="v">${last.vehicleWh} Wh at the same reading</span></div>
+                      <div class="kv">
+                          <span class="k">Difference</span>
+                          <span class="v">${signed(last.differenceWh)} Wh${relative(last.differenceWh, last.vehicleWh)}, over ${seen.readings.length} reading(s)</span>
+                      </div>
+                    `
+                  : html`
+                      <div class="kv"><span class="k">Station meter</span><span class="v">no reading reported</span></div>
+                      <div class="kv"><span class="k">This vehicle</span><span class="v">${seen.vehicleWh} Wh</span></div>
+                    `}
+        </div>
+        ${last
+              ? html`<p class="hint">Station and vehicle count the same modelled charge loop here, so their agreeing shows that field, unit and scale are right - not that a meter measured correctly.</p>`
+              : html`<p class="hint">Without a reading from the station there is nothing to put beside the vehicle's own count.</p>`}
+    `;
+
+}
+
+/** One clock in a sentence: how far, how sure, and whether it moved. */
+function clock(seen: SessionClock, tolerance_ms: number): string {
+
+    const offset = `${seconds(seen.offset_ms)}, resolved to ±${(seen.uncertainty_ms / 1000).toFixed(1)} s`;
+
+    const drift  = seen.drift_ms !== null && Math.abs(seen.drift_ms) > seen.uncertainty_ms
+                       ? `; moved ${seconds(seen.drift_ms)} over ${seen.samples} timestamps`
+                       : '';
+
+    const verdict = seen.agrees === false
+                        ? ` - more than the ${(tolerance_ms / 1000).toFixed(0)} s this vehicle tolerates`
+                        : '';
+
+    return offset + drift + verdict;
+
+}
+
+/** An offset in words: "0.3 s ahead", "90.2 s behind". */
+function seconds(ms: number): string {
+    return `${(Math.abs(ms) / 1000).toFixed(1)} s ${ms < 0 ? 'behind' : 'ahead'}`;
+}
+
+/** A difference with its sign, so that a zero reads as one. */
+function signed(value: number): string {
+    return value > 0 ? `+${value}` : `${value}`;
+}
+
+/** The difference relative to the vehicle's count, where that is not zero. */
+function relative(difference: number, vehicle: number): string {
+    return vehicle === 0 ? '' : ` (${signed(Number((100 * difference / vehicle).toFixed(2)))} %)`;
 }
 
 /** The outcome in the words somebody would use. */
