@@ -265,6 +265,8 @@ export interface SessionClock {
     uncertainty_ms:  number;
     /** Last offset minus first; null with a single sample. */
     drift_ms:        number | null;
+    /** Whether that drift is more than the two samples can tell from a second ticking over. */
+    drifted:         boolean;
     /** Whether the last offset is within the vehicle's tolerance, allowing for the uncertainty. */
     agrees:          boolean | null;
 }

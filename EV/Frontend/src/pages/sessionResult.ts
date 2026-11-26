@@ -179,7 +179,7 @@ function clock(seen: SessionClock, tolerance_ms: number): string {
 
     const offset = `${seconds(seen.offset_ms)}, resolved to ±${(seen.uncertainty_ms / 1000).toFixed(1)} s`;
 
-    const drift  = seen.drift_ms !== null && Math.abs(seen.drift_ms) > seen.uncertainty_ms
+    const drift  = seen.drifted && seen.drift_ms !== null
                        ? `; moved ${seconds(seen.drift_ms)} over ${seen.samples} timestamps`
                        : '';
 

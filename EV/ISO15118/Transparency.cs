@@ -135,7 +135,8 @@ namespace cloud.charging.open.EV.ISO15118
                                       EventLog                       Log)
         {
 
-            if (StationClock?.Drift is { } drift)
+            // Only a drift the two samples can tell from a second ticking over.
+            if (StationClock is { Drifted: true, Drift: { } drift })
                 Log.Info(String.Create(CultureInfo.InvariantCulture,
                              $"Clock: over {StationClock.Samples} responses the station's clock moved {Seconds(drift)} against this vehicle's."),
                          "15118", "clock");
@@ -208,6 +209,7 @@ namespace cloud.charging.open.EV.ISO15118
                          new JProperty("offset_ms",       Math.Round(last. Offset.     TotalMilliseconds, 0)),
                          new JProperty("uncertainty_ms",  Math.Round(last. Uncertainty.TotalMilliseconds, 0)),
                          new JProperty("drift_ms",        Clock.Drift is { } drift ? Math.Round(drift.TotalMilliseconds, 0) : null),
+                         new JProperty("drifted",         Clock.Drifted),
                          new JProperty("agrees",          Clock.Agrees(ClockTolerance))
                      );
 
