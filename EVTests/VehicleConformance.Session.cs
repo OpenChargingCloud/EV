@@ -19,6 +19,7 @@
 
 using System.Net;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
@@ -29,6 +30,7 @@ using cloud.charging.open.protocols.ISO15118.StateMachines;
 using cloud.charging.open.protocols.ISO15118.StateMachines.Iso2;
 using cloud.charging.open.protocols.ISO15118.StateMachines.Iso20;
 using cloud.charging.open.protocols.ISO15118.Transport;
+using cloud.charging.open.protocols.WWCP.Node.Certificates;
 
 #endregion
 
@@ -141,7 +143,108 @@ namespace cloud.charging.open.EV.Tests
                 Assert.That(logged.Count(line => line.Contains("VAN*M1 reads")),  Is.EqualTo(1),                         String.Join(Environment.NewLine, logged));
                 Assert.That(logged,                                               Has.Some.Contains("at the last one"),  String.Join(Environment.NewLine, logged));
 
+                // -2 has the MeteringReceipt and counts it on the run itself; a -20 EIM session
+                // is never asked to confirm ([V2G20-2704]), and says so as zero, not as nothing.
+                var confirmations = run["transparency"]?["meteringConfirmations"];
+
+                if (Protocol == "2")
+                    Assert.That(confirmations?.Type,                              Is.EqualTo(JTokenType.Null),           run.ToString());
+                else
+                {
+                    Assert.That(confirmations?["sent"] as JArray,                 Is.Not.Null.And.Empty,                 run.ToString());
+                    Assert.That(confirmations?.Value<Int32>("impossible"),        Is.Zero,                               run.ToString());
+                }
+
             });
+
+        }
+
+        #endregion
+
+        #region APlugAndChargeVehicleSaysWhichReadingsItConfirmed()
+
+        /// <summary>
+        /// A -20 station with a meter that asks for a MeteringConfirmation in every
+        /// charge-loop response after the first, and a vehicle with a contract
+        /// certificate: the vehicle signs each reading it is asked about, and the
+        /// result carries every one with the station's answer and the vehicle's own
+        /// count beside it, logged as it happens.
+        /// </summary>
+        [Test]
+        public async Task APlugAndChargeVehicleSaysWhichReadingsItConfirmed()
+        {
+
+            var vehicle  = (EV) Node;
+
+            Assert.That(vehicle.Certificates.Import(ContractChain(), CertificateKind.Contract, null, "EV test contract",
+                                                    out var contract, out var error),
+                        Is.True, error);
+
+            Assert.That(vehicle.TryUpdateSessionConfiguration(new JObject {
+                                                                  ["protocol"]                = "20",
+                                                                  ["contractCertificate"]     = contract!.Id,
+                                                                  ["maxChargingTimeSeconds"]  = 300
+                                                              },
+                                                              out var refused),
+                        Is.True, refused);
+
+            using var listener  = new TcpV2GListener(new IPEndPoint(IPAddress.Loopback, 0));
+
+            var meter    = new SigningMeter("VAN*M1", ECDsa.Create(ECCurve.NamedCurves.nistP256), TimeProvider.System);
+            var station  = OneSessionAt(listener, ProtocolVariant.Iso15118_20, meter, MeteringConfirmationEvery: 1);
+            var run      = await vehicle.RunSessionAsync(Connect: $"127.0.0.1:{listener.LocalEndpoint.Port}");
+
+            Assert.That(run.Value<String>("outcome"), Is.EqualTo("completed"), run.ToString());
+
+            await station.WaitAsync(TimeSpan.FromSeconds(30));
+
+            var confirmations  = run["transparency"]?["meteringConfirmations"];
+            var sent           = confirmations?["sent"] as JArray;
+            var logged         = vehicle.Log.Recent(200, Tag: "meter").Select(entry => entry.Message).ToArray();
+
+            Assert.That(run.Value<String>("authorization"), Is.EqualTo("pnc-signed"),  run.ToString());
+            Assert.That(sent,                               Is.Not.Null.And.Not.Empty, run.ToString());
+
+            Assert.Multiple(() => {
+
+                foreach (var confirmation in sent!)
+                {
+                    Assert.That(confirmation.Value<String> ("meterId"),       Is.EqualTo("VAN*M1"),  confirmation.ToString());
+                    Assert.That(confirmation.Value<String> ("response"),      Is.EqualTo("OK"),      confirmation.ToString());
+                    Assert.That(confirmation.Value<Double> ("differenceWh"),  Is.Zero,               confirmation.ToString());
+                    Assert.That(confirmation.Value<Boolean>("withReceipt"),   Is.False,              confirmation.ToString());
+                }
+
+                Assert.That(confirmations!.Value<Int32>("impossible"),  Is.Zero,  run.ToString());
+
+                Assert.That(logged.Count(line => line.StartsWith("MeteringConfirmation: signed the station's reading")),
+                            Is.EqualTo(sent!.Count),
+                            String.Join(Environment.NewLine, logged));
+
+            });
+
+        }
+
+        /// <summary>
+        /// A P-256 contract chain as PEM: the leaf, the sub-CA that issued it - the
+        /// schema wants at least one - and the leaf's key.
+        /// </summary>
+        private static Byte[] ContractChain()
+        {
+
+            using var caKey  = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+            var caRequest    = new CertificateRequest("CN=EV test MO Sub-CA", caKey, HashAlgorithmName.SHA256);
+            caRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+            using var ca     = caRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(2));
+
+            using var key    = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+            var request      = new CertificateRequest("CN=DEABCC12345678", key, HashAlgorithmName.SHA256);
+            request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
+            using var leaf   = request.Create(ca, DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1), [1, 2, 3, 4]);
+
+            return System.Text.Encoding.ASCII.GetBytes(leaf.ExportCertificatePem() + "\n" +
+                                                       ca.  ExportCertificatePem() + "\n" +
+                                                       key. ExportPkcs8PrivateKeyPem() + "\n");
 
         }
 
@@ -205,7 +308,7 @@ namespace cloud.charging.open.EV.Tests
 
         #endregion
 
-        #region (private static) OneSessionAt(Listener, Protocol, Meter = null, Clock = null)
+        #region (private static) OneSessionAt(Listener, Protocol, Meter = null, Clock = null, MeteringConfirmationEvery = 0)
 
         /// <summary>
         /// One DC session of the given protocol, as the reference station runs
@@ -213,10 +316,13 @@ namespace cloud.charging.open.EV.Tests
         /// </summary>
         /// <param name="Meter">The station's meter, where it has one: it reports a reading only then.</param>
         /// <param name="Clock">The station's clock, where it is not the system's.</param>
+        /// <param name="MeteringConfirmationEvery">How often a -20 station asks a Plug &amp; Charge vehicle to
+        /// confirm the reading, in charge-loop responses; 0 never.</param>
         private static async Task OneSessionAt(TcpV2GListener   Listener,
                                                ProtocolVariant  Protocol,
-                                               SigningMeter?    Meter   = null,
-                                               TimeProvider?    Clock   = null)
+                                               SigningMeter?    Meter                      = null,
+                                               TimeProvider?    Clock                      = null,
+                                               UInt32           MeteringConfirmationEvery  = 0)
         {
 
             using var stream = await Listener.AcceptAsync();
@@ -226,7 +332,8 @@ namespace cloud.charging.open.EV.Tests
             if (Protocol == ProtocolVariant.Iso15118_2)
                 await new Secc2   (PowerMode.Dc, TimeSpan.FromSeconds(60), Clock ?? TimeProvider.System) { InstalledMeter = Meter }.RunAsync(stream);
             else
-                await new Secc20Dc(              TimeSpan.FromSeconds(60), Clock ?? TimeProvider.System) { InstalledMeter = Meter }.RunAsync(stream);
+                await new Secc20Dc(              TimeSpan.FromSeconds(60), Clock ?? TimeProvider.System) { InstalledMeter            = Meter,
+                                                                                                          MeteringConfirmationEvery = MeteringConfirmationEvery }.RunAsync(stream);
 
         }
 
