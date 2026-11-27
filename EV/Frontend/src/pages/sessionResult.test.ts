@@ -38,3 +38,56 @@ describe('a session result', () => {
     });
 
 });
+
+
+describe('what a session result says of the station\'s clock and meter', () => {
+
+    const clock    = { samples: 12, unreadable: 0, firstOffset_ms: 300, offset_ms: 300, uncertainty_ms: 600, drift_ms: 0, drifted: false, agrees: true };
+
+    const reading  = { sample: 3, meterId: 'VAN*M1', stationWh: 4200, vehicleWh: 4200, differenceWh: 0, signed: true, meterTime: '2026-11-27T12:00:00.0000000+00:00' };
+
+    const seen     = { clockTolerance_ms: 5000, stationClock: clock, meterClock: clock, vehicleWh: 4200, readings: [ reading ] };
+
+    it('puts the station\'s reading beside the vehicle\'s own count, and their difference', () => {
+        const text = drawn({ ...completed, transparency: seen });
+        assert.match(text, /Transparency/);
+        assert.match(text, /4200 Wh at\s+VAN\*M1/);
+        assert.match(text, /4200 Wh at the same reading/);
+        assert.match(text, /0 Wh \(0 %\), over 1 reading\(s\)/);
+    });
+
+    it('says a signature is there and not that it holds', () => {
+        assert.match(drawn({ ...completed, transparency: seen }), /signed, not verified/);
+        assert.match(drawn({ ...completed, transparency: { ...seen, readings: [ { ...reading, signed: false } ] } }), /unsigned/);
+    });
+
+    it('says how far the station\'s clock is off, and when that is too far', () => {
+        const ahead = { ...clock, firstOffset_ms: 90200, offset_ms: 90200, agrees: false };
+        const text  = drawn({ ...completed, transparency: { ...seen, stationClock: ahead } });
+        assert.match(text, /90\.2 s ahead/);
+        assert.match(text, /more than the 5 s this vehicle tolerates/);
+        assert.doesNotMatch(drawn({ ...completed, transparency: seen }), /tolerates/);
+    });
+
+    it('says a clock moved only where that is more than a second ticking over', () => {
+        const ticked = { ...clock, drift_ms: 500, drifted: false };
+        const moved  = { ...clock, drift_ms: 4000, drifted: true };
+        assert.doesNotMatch(drawn({ ...completed, transparency: { ...seen, meterClock:   ticked } }), /moved/);
+        assert.match       (drawn({ ...completed, transparency: { ...seen, stationClock: moved  } }), /moved 4\.0 s ahead over 12 timestamps/);
+    });
+
+    it('says a -2 session shows no station clock, rather than leaving the line out', () => {
+        assert.match(drawn({ ...completed, transparency: { ...seen, stationClock: null } }), /ISO 15118-2 has no header timestamp/);
+    });
+
+    it('says there is nothing to compare where the station reported no reading', () => {
+        const text = drawn({ ...completed, transparency: { ...seen, meterClock: null, readings: [] } });
+        assert.match(text, /no reading reported/);
+        assert.match(text, /nothing to put beside the vehicle's own count/);
+    });
+
+    it('draws no such section for a run that has none', () => {
+        assert.doesNotMatch(drawn(completed), /Transparency/);
+    });
+
+});

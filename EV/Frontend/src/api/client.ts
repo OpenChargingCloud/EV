@@ -251,6 +251,53 @@ export interface SessionBattery {
     describe:              string | null;
 }
 
+/** A peer's clock against this vehicle's, over one session. Positive is ahead. */
+export interface SessionClock {
+    /** How many timestamps were compared. */
+    samples:         number;
+    /** How many could not be read as a time at all. */
+    unreadable:      number;
+    /** The offset at the first sample - before charging began. */
+    firstOffset_ms:  number;
+    /** The offset at the last sample. */
+    offset_ms:       number;
+    /** What the comparison cannot resolve: the whole second of a timestamp, half the round trip. */
+    uncertainty_ms:  number;
+    /** Last offset minus first; null with a single sample. */
+    drift_ms:        number | null;
+    /** Whether that drift is more than the two samples can tell from a second ticking over. */
+    drifted:         boolean;
+    /** Whether the last offset is within the vehicle's tolerance, allowing for the uncertainty. */
+    agrees:          boolean | null;
+}
+
+/** One meter reading of the station's, paired with the vehicle's own count of the same iteration. */
+export interface SessionReading {
+    sample:        number;
+    meterId:       string;
+    stationWh:     number;
+    vehicleWh:     number;
+    differenceWh:  number;
+    /** The reading carried a signature. Present, not verified. */
+    signed:        boolean;
+    meterTime:     string | null;
+}
+
+/**
+ * What the vehicle can say about the station's clock and meter from its own
+ * side: the first slice of "Chargy in the Vehicle".
+ */
+export interface SessionTransparency {
+    clockTolerance_ms:  number;
+    /** The station's clock, off the header of every -20 response; null over -2, which has none. */
+    stationClock:       SessionClock | null;
+    /** The meter's own clock, where a reading carried a timestamp. */
+    meterClock:         SessionClock | null;
+    /** The vehicle's own count at the end of the session. */
+    vehicleWh:          number;
+    readings:           SessionReading[];
+}
+
 /**
  * How one session went.
  *
@@ -282,7 +329,9 @@ export interface SessionRun {
     sameStation?:        boolean | null;
     contractInstalled?:  boolean;
     battery?:            SessionBattery | null;
-    tariff?:             { signaturePresent: boolean; digestOk: boolean; signatureOk: boolean; tuplesOffered?: number } | null;
+    /** The station's clock and meter beside the vehicle's own. */
+    transparency?:       SessionTransparency | null;
+    tariff?:            { signaturePresent: boolean; digestOk: boolean; signatureOk: boolean; tuplesOffered?: number } | null;
     /** The stages that ran before the session, where they did. */
     slac?:               SlacResult;
     t1s?:                T1SResult;
