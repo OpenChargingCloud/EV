@@ -396,11 +396,16 @@ namespace cloud.charging.open.EV.ISO15118
 
             };
 
+            // A station asks for these every n-th iteration at most, and never in
+            // the first, so a line for each is a handful, not hundreds.
+            evcc.OnMeteringConfirmation = sent => Transparency.SayConfirmation(sent, Log);
+
             await evcc.RunAsync(CancellationToken);
 
             #region What it added up to
 
             Transparency.SaySummary(evcc.StationClock, evcc.StationReadings, Log);
+            Transparency.SayConfirmationsImpossible(evcc.MeteringConfirmationsImpossible, Log);
 
             Log.Notice($"Session: {evcc.Exchanges} exchanges, {evcc.BytesOnWire} bytes on the wire (request side), " +
                        $"auth {evcc.AuthorizationMode}, session setup {evcc.SessionSetupCode}.",
@@ -502,7 +507,8 @@ namespace cloud.charging.open.EV.ISO15118
                            new JProperty("contractInstalled", evcc.InstalledContractCertificate is not null),
                            new JProperty("contractChainsTo",  installedChainsTo),
                            new JProperty("battery",           BatteryJSON(evcc.Battery, evcc.BatteryStop)),
-                           new JProperty("transparency",      Transparency.JSON(evcc.StationClock, evcc.MeterClock, evcc.StationReadings, evcc.Meter.Energy)),
+                           new JProperty("transparency",      Transparency.JSON(evcc.StationClock, evcc.MeterClock, evcc.StationReadings, evcc.Meter.Energy,
+                                                                                   evcc.MeteringConfirmations, evcc.MeteringConfirmationsImpossible)),
                            new JProperty("tariff",            evcc.Tariff is null
                                                                   ? null
                                                                   : new JObject(

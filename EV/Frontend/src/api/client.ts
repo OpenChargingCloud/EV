@@ -284,6 +284,29 @@ export interface SessionReading {
 }
 
 /**
+ * One -20 MeteringConfirmationReq the vehicle signed with its contract key,
+ * and what the station answered. The vehicle's own count stands beside the
+ * reading here, but it is not part of what was signed.
+ */
+export interface SessionConfirmation {
+    meterId:       string;
+    stationWh:     number;
+    vehicleWh:     number;
+    differenceWh:  number;
+    /** The station's cost receipt was signed along with the reading. */
+    withReceipt:   boolean;
+    /** The station's ResponseCode, as the schema spells it. */
+    response:      string;
+}
+
+/** What the vehicle did when the station asked it to confirm a reading (-20 only). */
+export interface SessionConfirmations {
+    /** How often the station asked for one the vehicle could not sign: no contract key, or no reading. */
+    impossible:    number;
+    sent:          SessionConfirmation[];
+}
+
+/**
  * What the vehicle can say about the station's clock and meter from its own
  * side: the first slice of "Chargy in the Vehicle".
  */
@@ -296,6 +319,8 @@ export interface SessionTransparency {
     /** The vehicle's own count at the end of the session. */
     vehicleWh:          number;
     readings:           SessionReading[];
+    /** The -20 MeteringConfirmations; null over -2, which counts its MeteringReceipts on the run itself. */
+    meteringConfirmations?: SessionConfirmations | null;
 }
 
 /**

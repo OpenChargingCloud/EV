@@ -1,4 +1,4 @@
-import type { SessionBattery, SessionClock, SessionRun, SessionTransparency } from '../api/client';
+import type { SessionBattery, SessionClock, SessionConfirmations, SessionRun, SessionTransparency } from '../api/client';
 import { formatValue } from '@node/ui';
 import { html, nothing, type TemplateResult } from '@node/view';
 
@@ -166,11 +166,70 @@ function transparency(seen: SessionTransparency): TemplateResult {
                       <div class="kv"><span class="k">Station meter</span><span class="v">no reading reported</span></div>
                       <div class="kv"><span class="k">This vehicle</span><span class="v">${seen.vehicleWh} Wh</span></div>
                     `}
+            ${seen.meteringConfirmations ? confirmations(seen.meteringConfirmations) : nothing}
         </div>
         ${last
               ? html`<p class="hint">Station and vehicle count the same modelled charge loop here, so their agreeing shows that field, unit and scale are right - not that a meter measured correctly.</p>`
               : html`<p class="hint">Without a reading from the station there is nothing to put beside the vehicle's own count.</p>`}
+        ${seen.meteringConfirmations?.sent.length
+              ? html`<p class="hint">A metering confirmation says the vehicle received the reading. It does not say the reading is right, and the vehicle's own count is not part of what it signs.</p>`
+              : nothing}
     `;
+
+}
+
+/**
+ * The -20 MeteringConfirmations: how many the vehicle signed, what the
+ * station answered, the last one beside the vehicle's count, and how often
+ * it was asked for one it could not sign.
+ */
+function confirmations(seen: SessionConfirmations): TemplateResult {
+
+    const last = seen.sent.at(-1);
+
+    const asked = last
+                      ? `${seen.sent.length} signed with the contract key; the station answered ${answers(seen)}`
+                      : seen.impossible === 0
+                          ? 'the station asked for none'
+                          : 'none signed';
+
+    return html`
+        <div class="kv"><span class="k">Metering confirmations</span><span class="v">${asked}</span></div>
+        ${last
+              ? html`
+                  <div class="kv">
+                      <span class="k">Last confirmed</span>
+                      <span class="v">
+                          ${last.stationWh} Wh at <code>${last.meterId}</code>${last.withReceipt ? ', with the cost receipt' : ''};
+                          this vehicle ${last.vehicleWh} Wh, difference ${signed(last.differenceWh)} Wh
+                      </span>
+                  </div>
+                `
+              : nothing}
+        ${seen.impossible > 0
+              ? html`
+                  <div class="kv">
+                      <span class="k">Could not sign</span>
+                      <span class="v">${seen.impossible} request(s) - no contract key in this session, or no reading with the request</span>
+                  </div>
+                `
+              : nothing}
+    `;
+
+}
+
+/** The station's answers in a few words: "OK to all", or each answer with how often it came. */
+function answers(seen: SessionConfirmations): string {
+
+    const counts = new Map<string, number>();
+
+    for (const sent of seen.sent)
+        counts.set(sent.response, (counts.get(sent.response) ?? 0) + 1);
+
+    if (counts.size === 1)
+        return `${[...counts.keys()][0]} to ${seen.sent.length === 1 ? 'it' : 'all'}`;
+
+    return [...counts].map(([response, count]) => `${response} ${count}x`).join(', ');
 
 }
 

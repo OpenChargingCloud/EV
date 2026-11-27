@@ -22,6 +22,7 @@ using System.Globalization;
 using Newtonsoft.Json.Linq;
 
 using cloud.charging.open.protocols.ISO15118.Metering;
+using cloud.charging.open.protocols.ISO15118.StateMachines.Iso20;
 using cloud.charging.open.protocols.WWCP.Node.Logging;
 
 #endregion
@@ -163,7 +164,47 @@ namespace cloud.charging.open.EV.ISO15118
 
         #endregion
 
-        #region JSON(StationClock, MeterClock, Readings, VehicleWh)
+        #region SayConfirmation(Confirmation, Log)
+
+        /// <summary>
+        /// One -20 <c>MeteringConfirmationReq</c> this vehicle signed, once the station has answered it.
+        /// </summary>
+        /// <remarks>
+        /// Said as what it is: an acknowledgement that the reading arrived. The vehicle's own count is
+        /// put beside it for the reader, but it is not part of what was signed - <c>SignedMeteringData</c>
+        /// has no place for it.
+        ///
+        /// Only answers that kept the session going arrive here: a <c>FAILED</c> one ends it in the
+        /// stack, and the session's error says so.
+        /// </remarks>
+        public static void SayConfirmation(MeteringConfirmationSent  Confirmation,
+                                           EventLog                  Log)
+
+            => Log.Info(String.Create(CultureInfo.InvariantCulture,
+                            $"MeteringConfirmation: signed the station's reading of {Confirmation.ChargedWh} Wh at {Confirmation.MeterId}" +
+                            $"{(Confirmation.WithReceipt ? " and its receipt" : "")} with the contract key " +
+                            $"(this vehicle counted {Confirmation.VehicleWh:F0} Wh); the station answered {Confirmation.ResponseCode}."),
+                        "15118", "meter");
+
+        #endregion
+
+        #region SayConfirmationsImpossible(Count, Log)
+
+        /// <summary>
+        /// How often a station asked for a confirmation this vehicle could not sign - said once, at the end.
+        /// </summary>
+        public static void SayConfirmationsImpossible(Int32     Count,
+                                                      EventLog  Log)
+        {
+            if (Count > 0)
+                Log.Warning($"MeteringConfirmation: the station asked {Count} time(s) for a confirmation this vehicle could not sign - " +
+                            "without a contract key (an EIM session) or without a reading in the request.",
+                            "15118", "meter");
+        }
+
+        #endregion
+
+        #region JSON(StationClock, MeterClock, Readings, VehicleWh, Confirmations = null, ConfirmationsImpossible = 0)
 
         /// <summary>
         /// The block the result carries, as the web interface reads it.
@@ -172,10 +213,15 @@ namespace cloud.charging.open.EV.ISO15118
         /// <param name="MeterClock">The meter's clock.</param>
         /// <param name="Readings">Every reading, paired.</param>
         /// <param name="VehicleWh">This vehicle's own count at the end of the session.</param>
-        public static JObject JSON(ClockComparison?               StationClock,
-                                   ClockComparison                MeterClock,
-                                   IReadOnlyList<StationReading>  Readings,
-                                   Double                         VehicleWh)
+        /// <param name="Confirmations">Every -20 <c>MeteringConfirmationReq</c> this vehicle signed, or null
+        /// over -2, which has the MeteringReceipt instead and counts it on its own.</param>
+        /// <param name="ConfirmationsImpossible">How often the station asked for one this vehicle could not sign.</param>
+        public static JObject JSON(ClockComparison?                         StationClock,
+                                   ClockComparison                          MeterClock,
+                                   IReadOnlyList<StationReading>            Readings,
+                                   Double                                   VehicleWh,
+                                   IReadOnlyList<MeteringConfirmationSent>? Confirmations            = null,
+                                   Int32                                    ConfirmationsImpossible  = 0)
 
             => new (
                    new JProperty("clockTolerance_ms",  ClockTolerance.TotalMilliseconds),
@@ -190,7 +236,21 @@ namespace cloud.charging.open.EV.ISO15118
                                                            new JProperty("differenceWh",  Math.Round(reading.DifferenceWh, 0)),
                                                            new JProperty("signed",        reading.Signed),
                                                            new JProperty("meterTime",     reading.MeterTime?.ToString("o"))
-                                                       ))))
+                                                       )))),
+                   new JProperty("meteringConfirmations",
+                                 Confirmations is null
+                                     ? null
+                                     : new JObject(
+                                           new JProperty("impossible",  ConfirmationsImpossible),
+                                           new JProperty("sent",        new JArray(Confirmations.Select(sent => new JObject(
+                                                                            new JProperty("meterId",       sent.MeterId),
+                                                                            new JProperty("stationWh",     sent.ChargedWh),
+                                                                            new JProperty("vehicleWh",     Math.Round(sent.VehicleWh, 0)),
+                                                                            new JProperty("differenceWh",  Math.Round(sent.ChargedWh - sent.VehicleWh, 0)),
+                                                                            new JProperty("withReceipt",   sent.WithReceipt),
+                                                                            new JProperty("response",      sent.ResponseCode.ToString())
+                                                                        ))))
+                                       ))
                );
 
         #endregion

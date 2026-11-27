@@ -91,3 +91,51 @@ describe('what a session result says of the station\'s clock and meter', () => {
     });
 
 });
+
+
+describe('what a session result says of the -20 metering confirmations', () => {
+
+    const clock    = { samples: 12, unreadable: 0, firstOffset_ms: 300, offset_ms: 300, uncertainty_ms: 600, drift_ms: 0, drifted: false, agrees: true };
+
+    const reading  = { sample: 3, meterId: 'VAN*M1', stationWh: 2400, vehicleWh: 2400, differenceWh: 0, signed: true, meterTime: null };
+
+    const sent     = { meterId: 'VAN*M1', stationWh: 1600, vehicleWh: 1600, differenceWh: 0, withReceipt: false, response: 'OK' };
+
+    const seen     = { clockTolerance_ms: 5000, stationClock: clock, meterClock: clock, vehicleWh: 2400, readings: [ reading ] };
+
+    it('says how many the vehicle signed, what the station answered, and the last beside the vehicle\'s count', () => {
+        const text = drawn({ ...completed, transparency: { ...seen, meteringConfirmations: { impossible: 0, sent: [ sent, { ...sent, stationWh: 2400, vehicleWh: 2400 } ] } } });
+        assert.match(text, /Metering confirmations\s*2 signed with the contract key; the station answered OK to all/);
+        assert.match(text, /Last confirmed\s*2400 Wh at\s+VAN\*M1;\s+this vehicle 2400 Wh, difference 0 Wh/);
+    });
+
+    it('says a confirmation acknowledges receipt, and that the vehicle\'s count is not in it', () => {
+        const text = drawn({ ...completed, transparency: { ...seen, meteringConfirmations: { impossible: 0, sent: [ sent ] } } });
+        assert.match(text, /received the reading\. It does not say the reading is right/);
+        assert.match(text, /answered OK to it/);
+    });
+
+    it('names a signed cost receipt, and each answer where they differ', () => {
+        const text = drawn({ ...completed, transparency: { ...seen, meteringConfirmations: { impossible: 0, sent: [ sent, { ...sent, withReceipt: true, response: 'WARNING_General' } ] } } });
+        assert.match(text, /OK 1x, WARNING_General 1x/);
+        assert.match(text, /with the cost receipt/);
+    });
+
+    it('says the station asked for none, and draws no hint about what a confirmation means', () => {
+        const text = drawn({ ...completed, transparency: { ...seen, meteringConfirmations: { impossible: 0, sent: [] } } });
+        assert.match(text, /the station asked for none/);
+        assert.doesNotMatch(text, /received the reading/);
+    });
+
+    it('says how often it was asked for one it could not sign', () => {
+        const text = drawn({ ...completed, transparency: { ...seen, meteringConfirmations: { impossible: 3, sent: [] } } });
+        assert.match(text, /none signed/);
+        assert.match(text, /Could not sign\s*3 request\(s\) - no contract key in this session/);
+    });
+
+    it('draws no such line over -2, which counts its metering receipts instead', () => {
+        assert.doesNotMatch(drawn({ ...completed, transparency: { ...seen, meteringConfirmations: null } }), /Metering confirmations/);
+        assert.doesNotMatch(drawn({ ...completed, transparency: seen }),                                    /Metering confirmations/);
+    });
+
+});
