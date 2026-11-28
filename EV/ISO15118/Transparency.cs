@@ -119,7 +119,7 @@ namespace cloud.charging.open.EV.ISO15118
                                       EventLog        Log)
 
             => Log.Info(String.Create(CultureInfo.InvariantCulture,
-                            $"Meter: {Reading.MeterId} reads {Reading.StationWh} Wh " +
+                            $"Meter: {Reading.MeterId} reads {StationFigure(Reading)} " +
                             $"({(Reading.Signed ? "signed, not verified" : "unsigned")}), this vehicle counted " +
                             $"{Reading.VehicleWh:F0} Wh - difference {Reading.DifferenceWh:+0;-0;0} Wh."),
                         "15118", "meter");
@@ -156,11 +156,32 @@ namespace cloud.charging.open.EV.ISO15118
                                 : "";
 
             Log.Notice(String.Create(CultureInfo.InvariantCulture,
-                           $"Meter: {Readings.Count} reading(s); at the last one the station had {last.StationWh} Wh " +
+                           $"Meter: {Readings.Count} reading(s); at the last one the station had {StationFigure(last)} " +
                            $"and this vehicle {last.VehicleWh:F0} Wh - difference {last.DifferenceWh:+0;-0;0} Wh{relative}."),
                        "15118", "meter");
 
         }
+
+        #endregion
+
+        #region (private static) StationFigure(Reading)
+
+        /// <summary>
+        /// The station's side of a reading, as a log line says it: the charged register alone, or in a
+        /// bidirectional session both registers and the net figure the vehicle's count is held to.
+        /// </summary>
+        /// <remarks>
+        /// The vehicle keeps one signed count, which goes down when it gives energy back, and the station
+        /// two rising registers. So the difference beside this figure is taken on the net one
+        /// (<see cref="StationReading.StationNetWh"/>), and a line that named only the charged register
+        /// would read as a contradiction: "reads 0 Wh, this vehicle counted -2001 Wh, difference 0".
+        /// </remarks>
+        private static String StationFigure(StationReading Reading)
+
+            => Reading.DischargedWh is { } discharged
+                   ? String.Create(CultureInfo.InvariantCulture,
+                                   $"{Reading.StationWh} Wh charged and {discharged} Wh discharged, {Reading.StationNetWh:F0} Wh net")
+                   : String.Create(CultureInfo.InvariantCulture, $"{Reading.StationWh} Wh");
 
         #endregion
 
@@ -232,6 +253,10 @@ namespace cloud.charging.open.EV.ISO15118
                                                            new JProperty("sample",        reading.Sample),
                                                            new JProperty("meterId",       reading.MeterId),
                                                            new JProperty("stationWh",     reading.StationWh),
+                                                           // A bidirectional session's discharge register, and
+                                                           // the net figure the difference is taken on.
+                                                           new JProperty("dischargedWh",  reading.DischargedWh),
+                                                           new JProperty("stationNetWh",  Math.Round(reading.StationNetWh, 0)),
                                                            new JProperty("vehicleWh",     Math.Round(reading.VehicleWh, 0)),
                                                            new JProperty("differenceWh",  Math.Round(reading.DifferenceWh, 0)),
                                                            new JProperty("signed",        reading.Signed),

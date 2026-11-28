@@ -56,6 +56,17 @@ describe('what a session result says of the station\'s clock and meter', () => {
         assert.match(text, /0 Wh \(0 %\), over 1 reading\(s\)/);
     });
 
+    // A bidirectional session: the station keeps two rising registers, the vehicle one count that goes
+    // down when it gives energy back. The difference is taken on the net figure, so a reading that showed
+    // only the charged register would say "0 Wh" beside a vehicle at -2001 Wh and a difference of 0.
+    it('shows both registers of a bidirectional reading, and the net figure the difference is taken on', () => {
+        const back = { ...reading, stationWh: 0, dischargedWh: 2001, stationNetWh: -2001, vehicleWh: -2001, differenceWh: 0 };
+        const text = drawn({ ...completed, transparency: { ...seen, vehicleWh: -2001, readings: [ back ] } });
+        assert.match(text, /0 Wh charged, 2001 Wh given back, -2001 Wh net at\s+VAN\*M1/);
+        assert.match(text, /-2001 Wh at the same reading/);
+        assert.doesNotMatch(drawn({ ...completed, transparency: seen }), /given back/);
+    });
+
     it('says a signature is there and not that it holds', () => {
         assert.match(drawn({ ...completed, transparency: seen }), /signed, not verified/);
         assert.match(drawn({ ...completed, transparency: { ...seen, readings: [ { ...reading, signed: false } ] } }), /unsigned/);

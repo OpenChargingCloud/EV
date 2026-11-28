@@ -152,7 +152,11 @@ function transparency(seen: SessionTransparency): TemplateResult {
                       <div class="kv">
                           <span class="k">Station meter</span>
                           <span class="v">
-                              ${last.stationWh} Wh at <code>${last.meterId}</code>,
+                              ${last.dischargedWh != null
+                                    // Bidirectional: both registers, and the net figure the difference
+                                    // below is taken on.
+                                    ? `${last.stationWh} Wh charged, ${last.dischargedWh} Wh given back, ${last.stationNetWh ?? last.stationWh - last.dischargedWh} Wh net`
+                                    : `${last.stationWh} Wh`} at <code>${last.meterId}</code>,
                               ${last.signed ? 'signed, not verified' : 'unsigned'}
                           </span>
                       </div>

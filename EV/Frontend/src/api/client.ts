@@ -275,8 +275,21 @@ export interface SessionClock {
 export interface SessionReading {
     sample:        number;
     meterId:       string;
+    /** The station's charged register. */
     stationWh:     number;
+    /**
+     * The station's discharge register, in a bidirectional session only: energy
+     * from the vehicle to the station. Absent or null otherwise.
+     */
+    dischargedWh?: number | null;
+    /**
+     * Charged minus discharged: what the vehicle's own count is held to, since
+     * that count goes down when energy goes back. The charged register alone
+     * when there is no discharge register.
+     */
+    stationNetWh?: number;
     vehicleWh:     number;
+    /** Station net figure minus the vehicle's count. */
     differenceWh:  number;
     /** The reading carried a signature. Present, not verified. */
     signed:        boolean;
