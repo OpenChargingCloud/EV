@@ -40,6 +40,37 @@ describe('a session result', () => {
 });
 
 
+describe('a session the vehicle ended over the station\'s meter', () => {
+
+    const explanation = 'meter 880 Wh, vehicle 800 Wh, difference 80 Wh, beyond 44 Wh';
+
+    const over20 = { stationNetWh: 880, vehicleWh: 800, limitWh: 44, explanation,
+                     terminationCode: 'urn:openchargingcloud:EVTerminationCode:MeteringDeviation', toldStation: true };
+
+    const over2  = { ...over20, terminationCode: null, toldStation: false };
+
+    it('says why, and over -20 the EVTerminationCode it told the station', () => {
+        const text = drawn({ ...completed, meteringDeviation: over20 });
+        assert.match(text, /The vehicle ended the charging over the station's meter: meter 880 Wh, vehicle 800 Wh, difference 80 Wh, beyond 44 Wh\./);
+        assert.match(text, /It told the station so: EVTerminationCode urn:openchargingcloud:EVTerminationCode:MeteringDeviation\./);
+        assert.doesNotMatch(text, /stayed in the vehicle/);
+    });
+
+    it('says why, and over -2 that the reason had nowhere to go', () => {
+        const text = drawn({ ...completed, protocol: '-2', mode: 'DC', meteringDeviation: over2 });
+        assert.match(text, /The vehicle ended the charging over the station's meter: meter 880 Wh/);
+        assert.match(text, /ISO 15118-2 has no field for the reason, so it stayed in the vehicle\./);
+        assert.doesNotMatch(text, /EVTerminationCode/);
+    });
+
+    it('says nothing of it where the vehicle did not', () => {
+        assert.doesNotMatch(drawn({ ...completed, meteringDeviation: null }), /over the station's meter/);
+        assert.doesNotMatch(drawn(completed),                                 /over the station's meter/);
+    });
+
+});
+
+
 describe('what a session result says of the station\'s clock and meter', () => {
 
     const clock    = { samples: 12, unreadable: 0, firstOffset_ms: 300, offset_ms: 300, uncertainty_ms: 600, drift_ms: 0, drifted: false, agrees: true };

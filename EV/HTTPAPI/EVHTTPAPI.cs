@@ -357,7 +357,8 @@ namespace cloud.charging.open.EV
             // Which interface and which protocol is a statement about the
             // link, and asked as one.
             if (new[] { "connect", "protocol", "mode", "tls", "slacPeer",
-                        "t1sBus", "t1sTransport", "t1sInterface", "t1sWeight", "renegotiate" }.Any(JSON.ContainsKey))
+                        "t1sBus", "t1sTransport", "t1sInterface", "t1sWeight", "renegotiate",
+                        "stopOnMeterDeviation" }.Any(JSON.ContainsKey))
                 required.Add(Permission.Edit(VehicleAccess.V2G));
 
             if (new[] { "targetEnergyKWh", "maxChargingTimeSeconds",

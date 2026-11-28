@@ -82,7 +82,7 @@ function vehicle({ method, path, body }: Asked): unknown {
 async function opened(): Promise<HTMLElement> {
     held = {
         connect:       null,
-        settings:      { protocol: 'both', mode: 'dc', tls: 'none', renegotiate: false, slacPeer: null,
+        settings:      { protocol: 'both', mode: 'dc', tls: 'none', renegotiate: false, stopOnMeterDeviation: null, slacPeer: null,
                          t1sTransport: 'none', t1sBus: null, t1sInterface: null, t1sWeight: 1 },
         certificates:  { pkiDirectory: null, vehicleCertificate: null, contractCertificate: null, oemCertificate: null,
                          tariffCertificate: null, trustAnchors: { v2gRoot: 0, moRoot: 0, oemRoot: 0 } },
@@ -139,6 +139,28 @@ describe('the Charging Session Settings page', () => {
         assert.ok(field(root, '#goals-form', 'maxChargingTimeMinutes') === minutes, 'the field was made anew');
         assert.equal(minutes.value, '30');
         assert.ok(document.activeElement === minutes, 'the focus went');
+
+    });
+
+    it('sends the meter limit as typed, and an emptied one as the explicit null that turns it off', async () => {
+
+        const root  = await opened();
+        const limit = field(root, '#link-form', 'stopOnMeterDeviation');
+
+        limit.value = ' 5:200 ';
+
+        submit(root, '#link-form');
+        await until(() => root.querySelector('#link-note')?.textContent === saved, 'the limit was not saved');
+
+        assert.equal((asked.filter(one => one.method === 'PUT').at(-1)?.body as SessionUpdate).stopOnMeterDeviation, '5:200');
+
+        limit.value = '';
+
+        submit(root, '#link-form');
+        await until(() => asked.filter(one => one.method === 'PUT').length >= 2 &&
+                          root.querySelector('#link-note')?.textContent === saved, 'the emptied limit was not saved');
+
+        assert.equal((asked.filter(one => one.method === 'PUT').at(-1)?.body as SessionUpdate).stopOnMeterDeviation, null);
 
     });
 

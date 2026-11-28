@@ -23,6 +23,7 @@ using System.Security.Cryptography.X509Certificates;
 
 using Newtonsoft.Json.Linq;
 
+using cloud.charging.open.protocols.ISO15118.Metering;
 using cloud.charging.open.protocols.ISO15118.Sap;
 using cloud.charging.open.protocols.ISO15118.Security;
 using cloud.charging.open.protocols.ISO15118.Session;
@@ -219,6 +220,8 @@ namespace cloud.charging.open.EV.ISO15118
                            Renegotiate       = Options.Renegotiate,
                            Battery           = Options.Battery,
 
+                           StopOnMeteringDeviation = Options.StopOnMeterDeviation,
+
                            // [V2G2-743]: a resumed session asks for the
                            // remainder, not for the whole of what it originally
                            // wanted. Only the batteryless case needs telling -
@@ -280,6 +283,16 @@ namespace cloud.charging.open.EV.ISO15118
                                  : "terminated."),
                             "15118", "session");
 
+            // The same decision as in -20, and the same Terminate on the wire;
+            // only the reason has nowhere to go.
+            if (evcc.MeteringDeviation is { } deviation)
+                Log.Warning($"Session: the vehicle ended the charging over the station's meter ({deviation.Explanation}) - " +
+                            "ISO 15118-2 has no field for the reason, so it stayed in the vehicle" +
+                            (Options.Pause
+                                 ? "; terminated rather than paused, so there is no session to rejoin."
+                                 : "."),
+                            "15118", "session");
+
             if (evcc.Tariff is { } tariff)
                 Log.Info($"Tariff: {tariff.TuplesOffered} tuple(s), signature " +
                          (tariff.SignaturePresent
@@ -300,8 +313,9 @@ namespace cloud.charging.open.EV.ISO15118
                            new JProperty("authorization",     evcc.AuthorizationMode),
                            new JProperty("meteringReceipts",  evcc.MeteringReceiptsSent),
                            new JProperty("renegotiations",    evcc.Renegotiations),
-                           new JProperty("paused",            Options.Pause && !evcc.TerminatedByStation),
+                           new JProperty("paused",            Options.Pause && !evcc.TerminatedByStation && evcc.MeteringDeviation is null),
                            new JProperty("terminatedByStation", evcc.TerminatedByStation),
+                           new JProperty("meteringDeviation", MeteringDeviationJSON(evcc.MeteringDeviation, ToldStation: false)),
                            new JProperty("battery",           BatteryJSON(evcc.Battery, evcc.BatteryStop)),
                            new JProperty("transparency",      Transparency.JSON(null, evcc.MeterClock, evcc.StationReadings, evcc.Meter.Energy)),
                            new JProperty("tariff",            evcc.Tariff is null
@@ -318,10 +332,11 @@ namespace cloud.charging.open.EV.ISO15118
             // resume - both by design there, and both changed in -20. So the
             // handle carries the identification and the meter reading, and the
             // two -20 fields stay empty.
-            // Ended by the station, there is nothing to rejoin.
+            // Ended by the station, or by the vehicle over the meter, there is
+            // nothing to rejoin.
             return new SessionResult(
                        json,
-                       evcc.TerminatedByStation
+                       evcc.TerminatedByStation || evcc.MeteringDeviation is not null
                            ? null
                            : new ResumableSession(evcc.SessionId, null, 0,
                                                   (Options.Resume?.DeliveredWh ?? 0) + evcc.Meter.Energy)
@@ -355,6 +370,8 @@ namespace cloud.charging.open.EV.ISO15118
             evcc.ResumeFrom(Options.Resume);
 
             evcc.Battery  = Options.Battery;
+
+            evcc.StopOnMeteringDeviation = Options.StopOnMeterDeviation;
 
             // The one battery goal that is also a protocol field: -20 carries
             // it as seconds from the session's own time anchor, and a Dynamic
@@ -423,6 +440,16 @@ namespace cloud.charging.open.EV.ISO15118
                             (Options.Pause
                                  ? "terminated rather than paused, so there is no session to rejoin."
                                  : "terminated."),
+                            "15118", "session");
+
+            // Ended by this side, with the reason on the wire: [V2G20-1084]
+            // leaves the vehicle no way to refuse the reading, only to stop.
+            if (evcc.MeteringDeviation is { } deviation)
+                Log.Warning($"Session: the vehicle ended the charging over the station's meter ({deviation.Explanation}) - " +
+                            $"it told the station EVTerminationCode {MeteringDeviation.TerminationCode}" +
+                            (Options.Pause
+                                 ? "; terminated rather than paused, so there is no session to rejoin."
+                                 : "."),
                             "15118", "session");
 
             var installedChainsTo = (String?) null;
@@ -500,8 +527,9 @@ namespace cloud.charging.open.EV.ISO15118
                            new JProperty("exchanges",         evcc.Exchanges),
                            new JProperty("bytesOnWire",       evcc.BytesOnWire),
                            new JProperty("authorization",     evcc.AuthorizationMode),
-                           new JProperty("paused",            Options.Pause && !evcc.TerminatedByStation),
+                           new JProperty("paused",            Options.Pause && !evcc.TerminatedByStation && evcc.MeteringDeviation is null),
                            new JProperty("terminatedByStation", evcc.TerminatedByStation),
+                           new JProperty("meteringDeviation", MeteringDeviationJSON(evcc.MeteringDeviation, ToldStation: true)),
                            new JProperty("resumeRefused",     evcc.ResumeRefused),
                            new JProperty("sameStation",       evcc.ResumedStationVerified),
                            new JProperty("contractInstalled", evcc.InstalledContractCertificate is not null),
@@ -518,7 +546,9 @@ namespace cloud.charging.open.EV.ISO15118
                                                                     ))
                        );
 
-            return new SessionResult(json, evcc.TerminatedByStation ? null : evcc.PausedSession);
+            return new SessionResult(json, evcc.TerminatedByStation || evcc.MeteringDeviation is not null
+                                               ? null
+                                               : evcc.PausedSession);
 
         }
 
@@ -709,6 +739,31 @@ namespace cloud.charging.open.EV.ISO15118
                          new JProperty("stoppedBecause",        Stop?.ToString()),
                          new JProperty("minimumMissed",         Battery.MinimumSoCMissed),
                          new JProperty("describe",              Stop is null ? null : Battery.Describe(Stop.Value))
+                     );
+
+        #endregion
+
+        #region (private static) MeteringDeviationJSON(Deviation, ToldStation)
+
+        /// <summary>
+        /// Why the vehicle ended the charging over the station's meter, as the page reads it, or null where
+        /// it did not.
+        /// </summary>
+        /// <param name="Deviation">The reading that crossed the limit.</param>
+        /// <param name="ToldStation">Whether the reason went out on the wire: ISO 15118-20's
+        /// <c>EVTerminationCode</c>, which ISO 15118-2 has no equivalent of.</param>
+        private static JObject? MeteringDeviationJSON(MeteringDeviation?  Deviation,
+                                                      Boolean             ToldStation)
+
+            => Deviation is null
+                   ? null
+                   : new JObject(
+                         new JProperty("stationNetWh",          Math.Round(Deviation.Reading.StationNetWh, 1)),
+                         new JProperty("vehicleWh",             Math.Round(Deviation.Reading.VehicleWh,    1)),
+                         new JProperty("limitWh",               Math.Round(Deviation.LimitWh,              1)),
+                         new JProperty("explanation",           Deviation.Explanation),
+                         new JProperty("terminationCode",       ToldStation ? MeteringDeviation.TerminationCode : null),
+                         new JProperty("toldStation",           ToldStation)
                      );
 
         #endregion

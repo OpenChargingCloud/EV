@@ -302,6 +302,12 @@ export const sessionPage: Page = {
                                 <span>ISO 15118-2: renegotiate after the first cycle</span>
                             </label>
 
+                            <label>Stop over the meter: percent[:Wh], e.g. 5 or 5:200 (empty = off)
+                                <input type="text" name="stopOnMeterDeviation" value="${settings.stopOnMeterDeviation ?? ''}"
+                                       placeholder="leave empty to compare nothing"
+                                       ?disabled=${!mayChangeLink} />
+                            </label>
+
                             <div class="form-actions">
                                 <button type="submit" class="btn primary" ?disabled=${!mayChangeLink}>Save</button>
                                 <span id="link-note"  class="form-notice" role="status"></span>
@@ -449,6 +455,7 @@ export const sessionPage: Page = {
             const peer    = String(data.get('slacPeer')     ?? '').trim();
             const bus     = String(data.get('t1sBus')       ?? '').trim();
             const nic     = String(data.get('t1sInterface') ?? '').trim();
+            const meter   = String(data.get('stopOnMeterDeviation') ?? '').trim();
             const weight  = numberField(form, 't1sWeight');
 
             // An emptied field is a setting taken back, which the vehicle spells
@@ -464,7 +471,8 @@ export const sessionPage: Page = {
                 protocol:     String(data.get('protocol') ?? 'both') as 'both' | '2' | '20',
                 mode:         String(data.get('mode')     ?? 'dc')   as 'ac' | 'dc' | 'mcs',
                 tls:          String(data.get('tls')      ?? 'none') as 'none' | 'dotnet' | 'bc',
-                renegotiate:  data.get('renegotiate') !== null
+                renegotiate:  data.get('renegotiate') !== null,
+                stopOnMeterDeviation: meter.length > 0 ? meter : null
             });
 
         }

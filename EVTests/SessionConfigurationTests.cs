@@ -23,6 +23,7 @@ using Newtonsoft.Json.Linq;
 
 using NUnit.Framework;
 
+using cloud.charging.open.protocols.ISO15118.Metering;
 using cloud.charging.open.protocols.ISO15118.SharedCC;
 using cloud.charging.open.protocols.ISO15118.StateMachines;
 
@@ -78,7 +79,8 @@ namespace cloud.charging.open.EV.Tests
                               DepartureIn:                   TimeSpan.FromMinutes(45),
                               MinimumStateOfCharge_percent:  60,
                               Renegotiate:                   true,
-                              SLACPeer:                      "127.0.0.1:9000"
+                              SLACPeer:                      "127.0.0.1:9000",
+                              StopOnMeterDeviation:          "5:200"
                           ).ToJSON();
 
             Assert.That(SessionConfiguration.TryParse(written, out var read, out var error), Is.True, error);
@@ -96,7 +98,106 @@ namespace cloud.charging.open.EV.Tests
                 Assert.That(read!.MinimumStateOfCharge_percent,  Is.EqualTo(60));
                 Assert.That(read!.Renegotiate,                   Is.True);
                 Assert.That(read!.SLACPeer,                      Is.EqualTo("127.0.0.1:9000"));
+                Assert.That(read!.StopOnMeterDeviation,          Is.EqualTo("5:200"));
             });
+
+        }
+
+        #endregion
+
+        #region stopOnMeterDeviation
+
+        [Test]
+        [TestCase("5",       0.05,  10UL)]
+        [TestCase("5%",      0.05,  10UL)]
+        [TestCase(" 5:200 ", 0.05, 200UL)]
+        [TestCase("2.5:0",   0.025,  0UL)]
+        public void AMeterLimitIsReadAsTheVehicleReadsIt(String Written, Double Fraction, UInt64 FloorWh)
+        {
+
+            Assert.That(SessionConfiguration.TryParse(new JObject(new JProperty("stopOnMeterDeviation", Written)),
+                                                      out var read, out var error),
+                        Is.True, error);
+
+            Assert.That(read!.StopOnMeterDeviation, Is.EqualTo(Written.Trim()));
+
+            // What is saved is what a session parses when it starts.
+            var limit = MeteringDeviationLimit.Parse(read.StopOnMeterDeviation!);
+
+            Assert.Multiple(() => {
+                Assert.That(limit.Fraction,  Is.EqualTo(Fraction).Within(1e-12));
+                Assert.That(limit.FloorWh,   Is.EqualTo(FloorWh));
+            });
+
+        }
+
+        [Test]
+        public void AMeterLimitIsWrittenAndReadBack()
+        {
+
+            var written = new SessionConfiguration(StopOnMeterDeviation: "5").ToJSON();
+
+            Assert.That(written.Value<String>("stopOnMeterDeviation"), Is.EqualTo("5"));
+
+            Assert.That(SessionConfiguration.TryParse(written, out var read, out var error), Is.True, error);
+
+            Assert.That(read!.StopOnMeterDeviation, Is.EqualTo("5"));
+
+        }
+
+        [Test]
+        public void AMeterLimitCanBeTakenBack()
+        {
+
+            // Left out: the limit stands.
+            Assert.That(SessionConfiguration.TryParse(new JObject(new JProperty("renegotiate", true)),
+                                                      out var silent, out var error),
+                        Is.True, error);
+
+            Assert.That(silent!.Cleared, Does.Not.Contain("stopOnMeterDeviation"));
+
+            // Explicitly null: the vehicle compares nothing again - and the null
+            // reaches the file, so the next start does not bring the limit back.
+            Assert.That(SessionConfiguration.TryParse(new JObject(new JProperty("stopOnMeterDeviation", JValue.CreateNull())),
+                                                      out var cleared, out error),
+                        Is.True, error);
+
+            Assert.Multiple(() => {
+                Assert.That(cleared!.StopOnMeterDeviation,                    Is.Null);
+                Assert.That(cleared!.Cleared,                                 Does.Contain("stopOnMeterDeviation"));
+                Assert.That(cleared!.ToJSON()["stopOnMeterDeviation"]?.Type,  Is.EqualTo(JTokenType.Null));
+            });
+
+        }
+
+        [Test]
+        [TestCase("five")]
+        [TestCase("0")]
+        [TestCase("-5")]
+        [TestCase("5:abc")]
+        [TestCase("5:-1")]
+        [TestCase("5,5")]
+        [TestCase("5:99999999999999999999999")]
+        public void ANonsenseMeterLimitIsRefusedByName(String Written)
+        {
+
+            Assert.That(SessionConfiguration.TryParse(new JObject(new JProperty("stopOnMeterDeviation", Written)),
+                                                      out _, out var error),
+                        Is.False, $"'{Written}' is no limit");
+
+            Assert.That(error, Does.Contain("session.stopOnMeterDeviation"));
+
+        }
+
+        [Test]
+        public void AMeterLimitThatIsNotAStringIsRefused()
+        {
+
+            Assert.That(SessionConfiguration.TryParse(new JObject(new JProperty("stopOnMeterDeviation", 5)),
+                                                      out _, out var error),
+                        Is.False);
+
+            Assert.That(error, Does.Contain("session.stopOnMeterDeviation"));
 
         }
 
@@ -536,7 +637,8 @@ namespace cloud.charging.open.EV.Tests
                                  T1SBus:                        "239.151.18.1:2354",
                                  T1STransport:                  T1STransportKind.UDP,
                                  T1SInterface:                  "eth1",
-                                 T1SWeight:                     3
+                                 T1SWeight:                     3,
+                                 StopOnMeterDeviation:          "5"
                              ).ToJSON();
 
             foreach (var field in SessionConfiguration.Clearable)

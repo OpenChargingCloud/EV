@@ -547,6 +547,7 @@ namespace cloud.charging.open.EV
                        new JProperty("mode",                     SessionSettings.ModeWritten     ?? "dc"),
                        new JProperty("tls",                      SessionSettings.TLSWritten      ?? "none"),
                        new JProperty("renegotiate",              SessionSettings.Renegotiate     ?? false),
+                       new JProperty("stopOnMeterDeviation",     SessionSettings.StopOnMeterDeviation),
                        new JProperty("slacPeer",                 SessionSettings.SLACPeer),
                        new JProperty("t1sBus",                   SessionSettings.T1SBus),
                        new JProperty("t1sTransport",             SessionSettings.T1STransportInEffect.Write()),
@@ -772,6 +773,7 @@ namespace cloud.charging.open.EV
             var t1sInterface = Settle("t1sInterface",        Configuration.T1SInterface,        previous.T1SInterface);
             var t1sWeight    = Settle("t1sWeight",           Configuration.T1SWeight,           previous.T1SWeight);
             var renegotiate  = Settle("renegotiate",         Configuration.Renegotiate,         previous.Renegotiate);
+            var meterLimit   = Settle("stopOnMeterDeviation", Configuration.StopOnMeterDeviation, previous.StopOnMeterDeviation);
 
             var targetEnergy = Settle("targetEnergyKWh",             Configuration.TargetEnergy_kWh,             previous.TargetEnergy_kWh);
             var maxTime      = Settle("maxChargingTimeSeconds",      Configuration.MaxChargingTime,              previous.MaxChargingTime);
@@ -799,7 +801,8 @@ namespace cloud.charging.open.EV
                                   t1sBus,
                                   t1sTransport,
                                   t1sInterface,
-                                  t1sWeight
+                                  t1sWeight,
+                                  meterLimit
                               );
 
             #region What to say about it
@@ -829,6 +832,9 @@ namespace cloud.charging.open.EV
 
             if (previous.Renegotiate != renegotiate)
                 changed.Add($"renegotiate = {renegotiate ?? false}");
+
+            if (previous.StopOnMeterDeviation != meterLimit)
+                changed.Add($"stop over the meter = {(meterLimit is null ? "off" : $"beyond {meterLimit}")}");
 
             foreach (var (name, was, now) in new (String, String?, String?)[] {
                          ("PKI directory",         previous.PKIDirectory,        pkiDirectory),
