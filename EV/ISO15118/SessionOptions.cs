@@ -20,6 +20,7 @@
 using org.GraphDefined.Vanaheimr.Hermod;
 using org.GraphDefined.Vanaheimr.Hermod.DNS;
 
+using cloud.charging.open.protocols.ISO15118.Metering;
 using cloud.charging.open.protocols.ISO15118.Security;
 using cloud.charging.open.protocols.ISO15118.SharedCC;
 using cloud.charging.open.protocols.ISO15118.Session;
@@ -182,6 +183,13 @@ namespace cloud.charging.open.EV.ISO15118
 
         /// <summary>ISO 15118-2: send PowerDelivery(Renegotiate) after the first cycle.</summary>
         public Boolean                        Renegotiate          { get; init; }
+
+        /// <summary>
+        /// How far a station's meter reading may stray from this vehicle's own count before the vehicle
+        /// ends the charging over it, or null to compare nothing. In ISO 15118-20 the reason goes out as
+        /// <c>EVTerminationCode</c>; ISO 15118-2 has no field for it, and it stays in the vehicle.
+        /// </summary>
+        public MeteringDeviationLimit?        StopOnMeterDeviation { get; init; }
 
         #endregion
 

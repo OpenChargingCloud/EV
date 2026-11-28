@@ -123,7 +123,7 @@ async function opened(link: Link | null = null): Promise<HTMLElement> {
     };
     charging = {
         connect:   null,
-        settings:  { protocol: 'both', mode: 'dc', tls: 'none', renegotiate: false, slacPeer: null,
+        settings:  { protocol: 'both', mode: 'dc', tls: 'none', renegotiate: false, stopOnMeterDeviation: null, slacPeer: null,
                      t1sTransport: 'none', t1sBus: null, t1sInterface: null, t1sWeight: 3 },
         running:   false,
         paused:    null,

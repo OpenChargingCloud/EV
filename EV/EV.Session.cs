@@ -22,6 +22,7 @@ using System.Net;
 using Newtonsoft.Json.Linq;
 
 using cloud.charging.open.protocols.ISO15118.Discovery;
+using cloud.charging.open.protocols.ISO15118.Metering;
 using cloud.charging.open.protocols.ISO15118.Session;
 using cloud.charging.open.protocols.ISO15118.SharedCC;
 using cloud.charging.open.protocols.ISO15118.Simulation;
@@ -655,6 +656,12 @@ namespace cloud.charging.open.EV
                                                   : null,
 
                        Renegotiate          = settings.Renegotiate ?? false,
+
+                       // Checked when it was saved, so this does not fail on a
+                       // setting that came in through the file or the page.
+                       StopOnMeterDeviation = settings.StopOnMeterDeviation is { } limit
+                                                  ? MeteringDeviationLimit.Parse(limit)
+                                                  : null,
 
                        Pause                = Pause,
                        Resume               = resume

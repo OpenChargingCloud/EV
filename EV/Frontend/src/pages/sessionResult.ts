@@ -36,6 +36,17 @@ export function sessionResult(run: SessionRun): TemplateResult {
                   ? html`<p class="hint">The station told the vehicle to end the charging, so the session ended for good - not paused, whatever this run asked for, and with nothing to rejoin.</p>`
                   : nothing}
 
+            ${run.meteringDeviation
+                  ? html`
+                      <p class="hint">
+                          The vehicle ended the charging over the station's meter: ${run.meteringDeviation.explanation}.
+                          ${run.meteringDeviation.toldStation && run.meteringDeviation.terminationCode
+                                ? html`It told the station so: <code>EVTerminationCode ${run.meteringDeviation.terminationCode}</code>.`
+                                : html`ISO 15118-2 has no field for the reason, so it stayed in the vehicle.`}
+                      </p>
+                    `
+                  : nothing}
+
             ${run.contractInstalled
                   ? html`<p class="hint">A contract certificate was issued and its private key unwrapped - the ECDH round trip closed.</p>`
                   : nothing}

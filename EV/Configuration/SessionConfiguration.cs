@@ -22,6 +22,7 @@ using System.Diagnostics.CodeAnalysis;
 
 using Newtonsoft.Json.Linq;
 
+using cloud.charging.open.protocols.ISO15118.Metering;
 using cloud.charging.open.protocols.ISO15118.SharedCC;
 using cloud.charging.open.protocols.ISO15118.StateMachines;
 using cloud.charging.open.protocols.ISO15118.Transport;
@@ -84,6 +85,7 @@ namespace cloud.charging.open.EV.Configuration
     /// <param name="T1STransport">Which medium the bus is on: "none", "auto", "afpacket" or "udp". With only a bus named it is "udp", because a group is a thing only the emulated medium has; with nothing named there is no bus.</param>
     /// <param name="T1SInterface">The interface the bus is on: the adapter, for AF_PACKET, which is the V2G interface when this says nothing; the interface to join the group on, for UDP, which the operating system picks when this says nothing.</param>
     /// <param name="T1SWeight">How many transmit opportunities per cycle this vehicle asks the coordinator for, 1 to 8. Three when the file does not say, which is more than any sensor and is the point.</param>
+    /// <param name="StopOnMeterDeviation">End the charging when a station's meter reading strays from the vehicle's own count by more than this, written <c>percent[:Wh]</c> - <c>5</c> is 5 % but never less than 10 Wh, <c>5:200</c> never less than 200 Wh. Without one the vehicle compares nothing.</param>
     /// <param name="Cleared">
     /// The fields the document set to an explicit null, which is how a setting is taken back rather than
     /// left alone. Not something the file says about the vehicle - it is something a request says about
@@ -110,6 +112,7 @@ namespace cloud.charging.open.EV.Configuration
                                               T1STransportKind? T1STransport                  = null,
                                               String?           T1SInterface                  = null,
                                               Byte?             T1SWeight                     = null,
+                                              String?           StopOnMeterDeviation          = null,
                                               IReadOnlySet<String>?
                                                                 Cleared                       = null)
     {
@@ -160,7 +163,7 @@ namespace cloud.charging.open.EV.Configuration
             "contractCertificate", "oemCertificate", "tariffCertificate", "slacPeer",
             "t1sBus", "t1sTransport", "t1sInterface", "t1sWeight",
             "targetEnergyKWh", "maxChargingTimeSeconds", "departureInSeconds",
-            "minimumStateOfChargePercent", "renegotiate"
+            "minimumStateOfChargePercent", "renegotiate", "stopOnMeterDeviation"
         };
 
         /// <summary>
@@ -194,6 +197,12 @@ namespace cloud.charging.open.EV.Configuration
         /// 1440 exchanges.
         /// </summary>
         public const Double  MaxChargingTimeSeconds  = 86400;
+
+        /// <summary>
+        /// The longest a metering-deviation limit may be written. "12.5:100000"
+        /// is eleven characters; the room above that is for spaces and a "%".
+        /// </summary>
+        public const Int32   MaxMeterDeviationLength = 32;
 
         #endregion
 
@@ -273,10 +282,34 @@ namespace cloud.charging.open.EV.Configuration
                 !ConfigurationReader.TryReadNumber (JSON, "minimumStateOfChargePercent", SectionName, 0,     100,                    out var minimumSoC,   out Error) ||
                 !ConfigurationReader.TryReadSeconds(JSON, "maxChargingTimeSeconds",      SectionName, 1,     MaxChargingTimeSeconds, out var maxTime,      out Error) ||
                 !ConfigurationReader.TryReadSeconds(JSON, "departureInSeconds",          SectionName, 1,     MaxChargingTimeSeconds, out var departure,    out Error) ||
-                !ConfigurationReader.TryReadBoolean(JSON, "renegotiate",         SectionName,                    out var renegotiate,  out Error))
+                !ConfigurationReader.TryReadBoolean(JSON, "renegotiate",         SectionName,                    out var renegotiate,  out Error) ||
+                !ConfigurationReader.TryReadString (JSON, "stopOnMeterDeviation", SectionName, MaxMeterDeviationLength, out var meterDeviation, out Error))
             {
                 return false;
             }
+
+            #region The meter comparison, refused here rather than at the first reading
+
+            // Read with the parser the vehicle itself uses, so that what is saved
+            // is what a session can run with, and a mistyped limit is a refused
+            // save rather than a session that fails once it is plugged in.
+            if (meterDeviation is not null)
+            {
+
+                try
+                {
+                    MeteringDeviationLimit.Parse(meterDeviation);
+                }
+                catch (Exception e) when (e is FormatException or OverflowException)
+                {
+                    Error = $"'{SectionName}.stopOnMeterDeviation' must be a positive percentage, optionally " +
+                            $"with a floor in whole watt-hours, like \"5\" or \"5:200\"; '{meterDeviation}' is not.";
+                    return false;
+                }
+
+            }
+
+            #endregion
 
             #region What to offer
 
@@ -449,6 +482,7 @@ namespace cloud.charging.open.EV.Configuration
                                 t1sTransport,
                                 t1sInterface?.Trim(),
                                 t1sWeight,
+                                meterDeviation,
                                 cleared
                             );
 
@@ -489,6 +523,7 @@ namespace cloud.charging.open.EV.Configuration
             if (DepartureIn.HasValue)                  json.Add("departureInSeconds",           DepartureIn.     Value.TotalSeconds);
             if (MinimumStateOfCharge_percent.HasValue) json.Add("minimumStateOfChargePercent",  MinimumStateOfCharge_percent.Value);
             if (Renegotiate.HasValue)                  json.Add("renegotiate",                  Renegotiate.Value);
+            if (StopOnMeterDeviation is not null)      json.Add("stopOnMeterDeviation",         StopOnMeterDeviation);
 
             // Written as explicit nulls rather than left out, so that the file
             // keeps saying "back to the default" instead of falling silent and

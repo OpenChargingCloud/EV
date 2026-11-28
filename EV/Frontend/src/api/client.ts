@@ -337,6 +337,21 @@ export interface SessionTransparency {
 }
 
 /**
+ * Why the vehicle ended the charging over the station's meter: the reading
+ * that crossed the limit, and whether the reason went out on the wire.
+ */
+export interface SessionMeteringDeviation {
+    stationNetWh:     number;
+    vehicleWh:        number;
+    limitWh:          number;
+    /** The four figures the decision rests on, as the -20 EVTerminationExplanation carries them. */
+    explanation:      string;
+    /** The EVTerminationCode sent over -20; null over -2, which has no field for it. */
+    terminationCode:  string | null;
+    toldStation:      boolean;
+}
+
+/**
  * How one session went.
  *
  * "completed" means it ran to SessionStop, which is not the same as it having
@@ -362,6 +377,8 @@ export interface SessionRun {
     pausedSessionId?:    string;
     /** The station told the vehicle to end the charging - Terminate over -20, StopCharging over -2 - so it ended the session for good. */
     terminatedByStation?: boolean;
+    /** The vehicle ended the charging because the station's meter strayed beyond its limit; null where it did not. */
+    meteringDeviation?:  SessionMeteringDeviation | null;
     resumeRefused?:      boolean;
     /** -20 only: whether a rejoined session was proved to be with the same station. */
     sameStation?:        boolean | null;
@@ -434,6 +451,8 @@ export interface SessionConfiguration {
         mode:         'ac' | 'dc' | 'mcs';
         tls:          'none' | 'dotnet' | 'bc';
         renegotiate:  boolean;
+        /** End the charging when the station's meter strays this far, as percent[:Wh]; null = off. */
+        stopOnMeterDeviation: string | null;
         slacPeer:     string | null;
         /** The 10BASE-T1S bus of an MCS coupler: which medium, where, and how often to be asked. */
         t1sTransport: 'none' | 'auto' | 'afpacket' | 'udp';
@@ -475,6 +494,7 @@ export interface SessionUpdate {
     mode?:                         'ac' | 'dc' | 'mcs' | null;
     tls?:                          'none' | 'dotnet' | 'bc' | null;
     renegotiate?:                  boolean | null;
+    stopOnMeterDeviation?:         string | null;
     slacPeer?:                     string | null;
     t1sTransport?:                 'none' | 'auto' | 'afpacket' | 'udp' | null;
     t1sBus?:                       string | null;
